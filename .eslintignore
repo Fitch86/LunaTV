@@ -1,0 +1,14 @@
+# ESLint ignore configuration for LunaTV
+
+# Exclude tvcors-proxy (independent project)
+tvcors-proxy/
+
+# Next.js build outputs
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Generated files
+*.d.ts

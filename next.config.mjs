@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 /* eslint-disable @typescript-eslint/no-var-requires */
 
+import withPWA from 'next-pwa';
+
 const nextConfig = {
-  output: 'standalone',
+  // output: 'standalone', // 临时禁用以避免Windows符号链接权限问题
   eslint: {
     dirs: ['src'],
   },
@@ -69,11 +71,9 @@ const nextConfig = {
   },
 };
 
-const withPWA = require('next-pwa')({
+export default withPWA({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
-});
-
-module.exports = withPWA(nextConfig);
+})(nextConfig);
