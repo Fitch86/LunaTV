@@ -931,6 +931,8 @@ function LivePageClient() {
       }
 
       console.log('视频URL:', videoUrl);
+      console.log('当前频道:', currentChannel);
+      console.log('当前直播源:', currentSourceRef.current);
 
       // 销毁之前的播放器实例并创建新的
       if (artPlayerRef.current) {

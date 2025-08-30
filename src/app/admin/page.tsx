@@ -4017,6 +4017,10 @@ const LiveSourceConfig = ({
   };
 
   const handleDelete = (key: string) => {
+    // 添加确认对话框
+    if (!confirm('确定要删除这个直播源吗？此操作不可恢复。')) {
+      return;
+    }
     withLoading(`deleteLiveSource_${key}`, () => callLiveSourceApi({ action: 'delete', key })).catch(() => {
       console.error('操作失败', 'delete', key);
     });
@@ -4207,6 +4211,11 @@ const LiveSourceConfig = ({
                 删除
               </button>
             </>
+          )}
+          {liveSource.from === 'config' && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              系统源
+            </span>
           )}
         </td>
       </tr>
