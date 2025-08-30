@@ -35,8 +35,17 @@ export function getTVCorsProxyBaseURL(): string {
     process.env.TVCORS_PROXY_URL ||
     'http://localhost:3001';
 
+
   // 确保URL不以斜杠结尾
-  return proxyUrl.endsWith('/') ? proxyUrl.slice(0, -1) : proxyUrl;
+  const finalUrl = proxyUrl.endsWith('/') ? proxyUrl.slice(0, -1) : proxyUrl;
+  // 检查URL是否有效
+  if (finalUrl.includes('https//')) {
+    // 尝试修复URL
+    const fixedUrl = finalUrl.replace('https//', 'https://');
+    return fixedUrl;
+  }
+  
+  return finalUrl;
 }
 
 /**
@@ -47,21 +56,23 @@ export function getTVCorsProxyBaseURL(): string {
  */
 export function buildProxyURL(type: ProxyType, params: ProxyParams): string {
   const baseURL = getTVCorsProxyBaseURL();
-  const url = new URL(`${baseURL}/api/proxy/${type}`);
 
-  // 添加查询参数
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      // URL参数需要编码
-      if (key === 'url') {
-        url.searchParams.set(key, encodeURIComponent(value.toString()));
-      } else {
-        url.searchParams.set(key, value.toString());
+  try {
+    const url = new URL(`${baseURL}/api/proxy/${type}`);
+
+    // 添加查询参数
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.append(key, String(value));
       }
-    }
-  });
+    });
 
-  return url.toString();
+    const finalUrl = url.toString();
+    return finalUrl;
+  } catch (error) {
+    // 如果构建URL失败，返回空字符串
+    return '';
+  }
 }
 
 /**
@@ -76,6 +87,12 @@ export function buildM3U8ProxyURL(
   source?: string,
   allowCORS?: boolean
 ): string {
+  // 检查videoUrl是否为有效URL
+  if (!videoUrl || typeof videoUrl !== 'string' || videoUrl.trim() === '') {
+    return '';
+  }
+
+  // 对于有效的URL，始终通过代理
   const params: ProxyParams = { url: videoUrl };
 
   if (source) {
@@ -86,7 +103,12 @@ export function buildM3U8ProxyURL(
     params.allowCORS = allowCORS;
   }
 
-  return buildProxyURL(ProxyType.M3U8, params);
+  try {
+    return buildProxyURL(ProxyType.M3U8, params);
+  } catch {
+    // 如果代理构建失败，返回原始URL
+    return videoUrl;
+  }
 }
 
 /**
@@ -147,13 +169,24 @@ export function buildKeyProxyURL(keyUrl: string, source?: string): string {
  * @returns Logo代理URL
  */
 export function buildLogoProxyURL(logoUrl: string, source?: string): string {
+  // 检查logoUrl是否为有效URL
+  if (!logoUrl || typeof logoUrl !== 'string' || logoUrl.trim() === '') {
+    return '';
+  }
+
+  // 对于有效的URL，始终通过代理
   const params: ProxyParams = { url: logoUrl };
 
   if (source) {
     params['moontv-source'] = source;
   }
 
-  return buildProxyURL(ProxyType.LOGO, params);
+  try {
+    return buildProxyURL(ProxyType.LOGO, params);
+  } catch {
+    // 如果代理构建失败，返回原始URL
+    return logoUrl;
+  }
 }
 
 /**

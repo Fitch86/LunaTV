@@ -17,14 +17,17 @@ import {
 } from '@/lib/db.client';
 import { buildLogoProxyURL, buildM3U8ProxyURL } from '@/lib/proxy';
 import { parseCustomTimeFormat } from '@/lib/time';
+import { useVideoLoadingState } from '@/hooks/useVideoLoadingState';
 
 import EpgScrollableRow from '@/components/EpgScrollableRow';
+import LiveLoadingIndicator from '@/components/LiveLoadingIndicator';
 import PageLayout from '@/components/PageLayout';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
 declare global {
   interface HTMLVideoElement {
     hls?: any;
+    hlsCleanup?: () => void;
   }
 }
 
@@ -63,6 +66,23 @@ function LivePageClient() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  // 使用新的加载状态Hook
+  const {
+    loadingState: videoLoadingState,
+    loadingMessage: videoLoadingMessage,
+    loadingTime: videoLoadingTime,
+    proxyStatus,
+    updateLoadingState,
+    smartUpdateState,
+    resetLoadingState,
+    recordProxyResponse,
+    recordSegmentRequest,
+    recordError,
+    updateProxyStatus,
+    isSourceLikelyFailed,
+    hasLoadingHope
+  } = useVideoLoadingState();
 
   // 直播源相关
   const [liveSources, setLiveSources] = useState<LiveSource[]>([]);
@@ -607,6 +627,12 @@ function LivePageClient() {
           artPlayerRef.current.video.load();
         }
 
+        // 调用HLS清理函数
+        if (artPlayerRef.current.video && artPlayerRef.current.video.hlsCleanup) {
+          artPlayerRef.current.video.hlsCleanup();
+          artPlayerRef.current.video.hlsCleanup = null;
+        }
+
         // 销毁 HLS 实例
         if (artPlayerRef.current.video && artPlayerRef.current.video.hls) {
           artPlayerRef.current.video.hls.destroy();
@@ -841,6 +867,7 @@ function LivePageClient() {
         } catch (error) {
           // ignore
         }
+        
         // 拦截manifest和level请求
         if (
           (context as any).type === 'manifest' ||
@@ -862,6 +889,44 @@ function LivePageClient() {
             }
           }
         }
+        
+        // 监控代理响应
+        const originalCallbacks = {
+          onSuccess: callbacks.onSuccess,
+          onError: callbacks.onError,
+          onTimeout: callbacks.onTimeout
+        };
+        
+        // 包装回调函数以监控响应
+        callbacks.onSuccess = function(response: any, stats: any, context: any, networkDetails: any) {
+          // 记录代理响应
+          recordProxyResponse();
+          
+          // 如果是segment请求，记录segment请求
+          if (context.type === 'segment') {
+            recordSegmentRequest();
+          }
+          
+          // 调用原始回调
+          originalCallbacks.onSuccess(response, stats, context, networkDetails);
+        };
+        
+        callbacks.onError = function(error: any, context: any, networkDetails: any) {
+          // 记录错误
+          recordError();
+          
+          // 调用原始回调
+          originalCallbacks.onError(error, context, networkDetails);
+        };
+        
+        callbacks.onTimeout = function(stats: any, context: any, networkDetails: any) {
+          // 记录错误
+          recordError();
+          
+          // 调用原始回调
+          originalCallbacks.onTimeout(stats, context, networkDetails);
+        };
+        
         // 执行原始load方法
         load(context, config, callbacks);
       };
@@ -871,8 +936,13 @@ function LivePageClient() {
   function m3u8Loader(video: HTMLVideoElement, url: string) {
     if (!Hls) {
       console.error('HLS.js 未加载');
+      updateLoadingState('error', 'HLS.js 未加载');
       return;
     }
+
+    // 重置加载状态
+    resetLoadingState();
+    smartUpdateState('connecting', '正在连接视频源...');
 
     // 清理之前的 HLS 实例
     if (video.hls) {
@@ -898,23 +968,133 @@ function LivePageClient() {
     hls.attachMedia(video);
     video.hls = hls;
 
+    // 监听HLS事件以更新加载状态
+    let fragmentLoadStartTime = 0;
+    let hasLoadedFirstFragment = false;
+    let errorCount = 0;
+    let lastEventTime = Date.now();
+
+    // 更新最后事件时间
+    const updateLastEventTime = () => {
+      lastEventTime = Date.now();
+    };
+
+    // 检查是否长时间没有事件
+    const checkActivity = () => {
+      const now = Date.now();
+      if (now - lastEventTime > 20000) { // 20秒无响应
+        if (!proxyStatus.isResponding) {
+          updateLoadingState('noResponse', '代理服务器无响应，请检查网络连接或切换源');
+        } else {
+          updateLoadingState('timeout', '视频加载超时，请尝试切换源');
+        }
+        setIsVideoLoading(false);
+      }
+    };
+
+    // 定期检查活动状态
+    const activityCheckInterval = setInterval(checkActivity, 5000);
+
+    // 当开始加载M3U8清单时
+    hls.on(Hls.Events.MANIFEST_LOADING, () => {
+      updateLastEventTime();
+      setIsVideoLoading(true);
+      smartUpdateState('connecting', '正在连接视频源...');
+    });
+
+    // 当M3U8清单加载完成时
+    hls.on(Hls.Events.MANIFEST_LOADED, () => {
+      updateLastEventTime();
+      recordProxyResponse();
+      smartUpdateState('loading', '正在解析播放列表...');
+    });
+
+    // 当开始加载片段时
+    hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+      updateLastEventTime();
+      fragmentLoadStartTime = Date.now();
+      if (!hasLoadedFirstFragment) {
+        smartUpdateState('loading', '正在加载首个视频片段...');
+      } else {
+        smartUpdateState('buffering', '正在缓冲视频片段...');
+      }
+    });
+
+    // 当片段加载完成时
+    hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+      updateLastEventTime();
+      recordSegmentRequest();
+      if (!hasLoadedFirstFragment) {
+        hasLoadedFirstFragment = true;
+        updateLoadingState('success', '视频加载成功');
+        setIsVideoLoading(false);
+      }
+    });
+
+    // 当发生错误时
     hls.on(Hls.Events.ERROR, function (event: any, data: any) {
+      updateLastEventTime();
+      recordError();
       console.error('HLS Error:', event, data);
+      errorCount++;
+
+      // 如果是网络错误，显示特定消息
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
+          updateLoadingState('noResponse', '视频源连接失败，无法获取播放列表');
+        } else if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+          updateLoadingState('error', '视频片段加载失败，请检查网络或切换源');
+        } else {
+          updateLoadingState('error', '网络连接失败，请检查网络设置');
+        }
+      } 
+      // 如果是媒体错误，显示特定消息
+      else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        updateLoadingState('error', '视频格式不支持或文件损坏');
+      }
+      // 其他错误
+      else {
+        updateLoadingState('error', '视频加载失败，请检查网络或切换源');
+      }
+
+      // 如果错误次数过多，停止加载
+      if (errorCount > 3) {
+        setIsVideoLoading(false);
+      }
 
       if (data.fatal) {
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
-            hls.startLoad();
+            // 尝试重新加载
+            setTimeout(() => {
+              hls.startLoad();
+            }, 2000);
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
+            // 尝试恢复媒体错误
             // hls.recoverMediaError();
             break;
           default:
+            // 销毁实例
             hls.destroy();
             break;
         }
       }
     });
+
+    // 当播放器可以播放时
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+      updateLastEventTime();
+      smartUpdateState('loading', '正在准备播放...');
+    });
+
+    // 清理函数
+    const cleanup = () => {
+      clearInterval(activityCheckInterval);
+    };
+
+    // 将清理函数附加到video对象上，以便在销毁时调用
+    video.hlsCleanup = cleanup;
   }
 
   // 播放器初始化
@@ -1020,26 +1200,38 @@ function LivePageClient() {
         artPlayerRef.current.on('ready', () => {
           setError(null);
           setIsVideoLoading(false);
+          updateLoadingState('success', '视频播放已准备就绪');
         });
 
         artPlayerRef.current.on('loadstart', () => {
           setIsVideoLoading(true);
+          updateLoadingState('loading', '开始加载视频...');
         });
 
         artPlayerRef.current.on('loadeddata', () => {
           setIsVideoLoading(false);
+          updateLoadingState('buffering', '视频数据加载完成，正在缓冲...');
         });
 
         artPlayerRef.current.on('canplay', () => {
           setIsVideoLoading(false);
+          updateLoadingState('success', '视频可以播放');
         });
 
         artPlayerRef.current.on('waiting', () => {
           setIsVideoLoading(true);
+          updateLoadingState('buffering', '视频缓冲中，请稍候...');
         });
 
         artPlayerRef.current.on('error', (err: any) => {
           console.error('播放器错误:', err);
+          setIsVideoLoading(false);
+          updateLoadingState('error', '播放器发生错误，请重试或切换源');
+        });
+
+        artPlayerRef.current.on('playing', () => {
+          setIsVideoLoading(false);
+          updateLoadingState('playing', '正在播放视频');
         });
 
         if (artPlayerRef.current?.video) {
@@ -1375,21 +1567,22 @@ function LivePageClient() {
 
                 {/* 视频加载蒙层 */}
                 {isVideoLoading && (
-                  <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[500] transition-all duration-300'>
-                    <div className='text-center max-w-md mx-auto px-6'>
-                      <div className='relative mb-8'>
-                        <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-                          <div className='text-white text-4xl'>📺</div>
-                          <div className='absolute -inset-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl opacity-20 animate-spin'></div>
-                        </div>
-                      </div>
-                      <div className='space-y-2'>
-                        <p className='text-xl font-semibold text-white animate-pulse'>
-                          🔄 IPTV 加载中...
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <LiveLoadingIndicator 
+                    loadingState={videoLoadingState}
+                    loadingMessage={videoLoadingMessage}
+                    loadingTime={videoLoadingTime}
+                    proxyStatus={proxyStatus}
+                    isSourceLikelyFailed={isSourceLikelyFailed}
+                    hasLoadingHope={hasLoadingHope}
+                    onRetry={() => {
+                      if (currentChannel) {
+                        setVideoUrl(currentChannel.url);
+                      }
+                    }}
+                    onSwitchSource={() => {
+                      setActiveTab('sources');
+                    }}
+                  />
                 )}
               </div>
             </div>
@@ -1494,7 +1687,7 @@ function LivePageClient() {
                                      ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
                                      : selectedGroup === group
                                      ? 'text-green-500 dark:text-green-400'
-                                     : 'text-gray-700 hover:text-green-600 dark:text-gray-300 dark:hover:text-green-400'
+                                     : 'text-gray-700 hover:text-green-600 dark:text-gray-300 dark:hover:text-green-400 hover:bg-black/3 dark:hover:bg-white/3'
                                  }
                                `.trim()}
                             >

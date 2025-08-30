@@ -25,6 +25,7 @@ import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
+import LiveLoadingIndicator from '@/components/LiveLoadingIndicator';
 import PageLayout from '@/components/PageLayout';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
@@ -41,6 +42,7 @@ interface WakeLockSentinel {
   addEventListener(type: 'release', listener: () => void): void;
   removeEventListener(type: 'release', listener: () => void): void;
 }
+import { useVideoLoadingState } from '@/hooks/useVideoLoadingState';
 
 function PlayPageClient() {
   const router = useRouter();
@@ -56,6 +58,27 @@ function PlayPageClient() {
   const [loadingMessage, setLoadingMessage] = useState('正在搜索播放源...');
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SearchResult | null>(null);
+
+  // 换源加载状态
+  const [playVideoLoading, setPlayVideoLoading] = useState(true);
+  const [playVideoLoadingStage, setPlayVideoLoadingStage] = useState<
+    'initing' | 'sourceChanging'
+  >('initing');
+  
+  // 使用新的加载状态Hook
+  const {
+    loadingState: videoLoadingState,
+    loadingMessage: videoLoadingMessage,
+    loadingTime: videoLoadingTime,
+    proxyStatus,
+    updateLoadingState,
+    smartUpdateState,
+    resetLoadingState,
+    recordProxyResponse,
+    recordSegmentRequest,
+    recordError,
+    updateProxyStatus
+  } = useVideoLoadingState();
 
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
@@ -189,12 +212,6 @@ function PlayPageClient() {
   // 折叠状态（仅在 lg 及以上屏幕有效）
   const [isEpisodeSelectorCollapsed, setIsEpisodeSelectorCollapsed] =
     useState(false);
-
-  // 换源加载状态
-  const [isVideoLoading, setIsVideoLoading] = useState(true);
-  const [videoLoadingStage, setVideoLoadingStage] = useState<
-    'initing' | 'sourceChanging'
-  >('initing');
 
   // 播放进度保存相关
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -486,9 +503,11 @@ function PlayPageClient() {
         artPlayerRef.current = null;
 
         console.log('播放器资源已清理');
+        updateLoadingState('idle', '播放器已清理');
       } catch (err) {
         console.warn('清理播放器资源时出错:', err);
         artPlayerRef.current = null;
+        updateLoadingState('error', '清理播放器资源时出错');
       }
     }
   };
@@ -857,8 +876,9 @@ function PlayPageClient() {
   ) => {
     try {
       // 显示换源加载状态
-      setVideoLoadingStage('sourceChanging');
-      setIsVideoLoading(true);
+      setPlayVideoLoadingStage('sourceChanging');
+      setPlayVideoLoading(true);
+      updateLoadingState('loading', '正在切换播放源...');
 
       // 记录当前播放进度（仅在同一集数切换时恢复）
       const currentPlayTime = artPlayerRef.current?.currentTime || 0;
@@ -895,6 +915,7 @@ function PlayPageClient() {
       );
       if (!newDetail) {
         setError('未找到匹配结果');
+        updateLoadingState('error', '未找到匹配结果');
         return;
       }
 
@@ -931,17 +952,20 @@ function PlayPageClient() {
       setCurrentId(newId);
       setDetail(newDetail);
       setCurrentEpisodeIndex(targetIndex);
+      
+      updateLoadingState('success', '播放源切换成功');
     } catch (err) {
       // 隐藏换源加载状态
-      setIsVideoLoading(false);
+      setPlayVideoLoading(false);
+      updateLoadingState('error', '播放源切换失败');
       setError(err instanceof Error ? err.message : '换源失败');
     }
   };
 
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyboardShortcuts);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleKeyboardShortcuts);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -956,6 +980,9 @@ function PlayPageClient() {
         saveCurrentPlayProgress();
       }
       setCurrentEpisodeIndex(episodeNumber);
+      // 显示加载状态
+      setPlayVideoLoading(true);
+      updateLoadingState('loading', '正在切换到第' + (episodeNumber + 1) + '集...');
     }
   };
 
@@ -967,6 +994,9 @@ function PlayPageClient() {
         saveCurrentPlayProgress();
       }
       setCurrentEpisodeIndex(idx - 1);
+      // 显示加载状态
+      setPlayVideoLoading(true);
+      updateLoadingState('loading', '正在切换到第' + idx + '集...');
     }
   };
 
@@ -978,35 +1008,29 @@ function PlayPageClient() {
         saveCurrentPlayProgress();
       }
       setCurrentEpisodeIndex(idx + 1);
+      // 显示加载状态
+      setPlayVideoLoading(true);
+      updateLoadingState('loading', '正在切换到第' + (idx + 2) + '集...');
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // 键盘快捷键
-  // ---------------------------------------------------------------------------
-  // 处理全局快捷键
-  const handleKeyboardShortcuts = (e: KeyboardEvent) => {
-    // 忽略输入框中的按键事件
-    if (
-      (e.target as HTMLElement).tagName === 'INPUT' ||
-      (e.target as HTMLElement).tagName === 'TEXTAREA'
-    )
-      return;
-
-    // Alt + 左箭头 = 上一集
-    if (e.altKey && e.key === 'ArrowLeft') {
-      if (detailRef.current && currentEpisodeIndexRef.current > 0) {
-        handlePreviousEpisode();
+  // 键盘快捷键处理
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Alt + 右箭头 = 下一集
+    if (e.altKey && e.key === 'ArrowRight') {
+      if (
+        detailRef.current?.episodes &&
+        currentEpisodeIndexRef.current < detailRef.current.episodes.length - 1
+      ) {
+        handleNextEpisode();
         e.preventDefault();
       }
     }
 
-    // Alt + 右箭头 = 下一集
-    if (e.altKey && e.key === 'ArrowRight') {
-      const d = detailRef.current;
-      const idx = currentEpisodeIndexRef.current;
-      if (d && idx < d.episodes.length - 1) {
-        handleNextEpisode();
+    // Alt + 左箭头 = 上一集
+    if (e.altKey && e.key === 'ArrowLeft') {
+      if (currentEpisodeIndexRef.current > 0) {
+        handlePreviousEpisode();
         e.preventDefault();
       }
     }
@@ -1247,11 +1271,13 @@ function PlayPageClient() {
       currentEpisodeIndex < 0
     ) {
       setError(`选集索引无效，当前共 ${totalEpisodes} 集`);
+      updateLoadingState('error', `选集索引无效，当前共 ${totalEpisodes} 集`);
       return;
     }
 
     if (!videoUrl) {
       setError('视频地址无效');
+      updateLoadingState('error', '视频地址无效');
       return;
     }
     console.log(videoUrl);
@@ -1273,6 +1299,8 @@ function PlayPageClient() {
           videoUrl
         );
       }
+      // 更新加载状态
+      updateLoadingState('success', '视频切换成功');
       return;
     }
 
@@ -1281,6 +1309,9 @@ function PlayPageClient() {
       cleanupPlayer();
     }
 
+    // 显示加载状态
+    setPlayVideoLoading(true);
+    updateLoadingState('loading', '正在初始化播放器...');
     try {
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -1325,8 +1356,13 @@ function PlayPageClient() {
           m3u8: function (video: HTMLVideoElement, url: string) {
             if (!Hls) {
               console.error('HLS.js 未加载');
+              updateLoadingState('error', 'HLS.js 未加载');
               return;
             }
+
+            // 重置加载状态
+            resetLoadingState();
+            updateLoadingState('connecting', '正在连接视频源...');
 
             if (video.hls) {
               video.hls.destroy();
@@ -1353,8 +1389,62 @@ function PlayPageClient() {
 
             ensureVideoSource(video, url);
 
+            // 监听HLS事件以更新加载状态
+            let hasLoadedFirstFragment = false;
+            let errorCount = 0;
+
+            // 当开始加载M3U8清单时
+            hls.on(Hls.Events.MANIFEST_LOADING, () => {
+              setPlayVideoLoading(true);
+              updateLoadingState('loading', '正在连接视频源...');
+            });
+
+            // 当M3U8清单加载完成时
+            hls.on(Hls.Events.MANIFEST_LOADED, () => {
+              updateLoadingState('loading', '正在解析播放列表...');
+            });
+
+            // 当开始加载片段时
+            hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+              if (!hasLoadedFirstFragment) {
+                updateLoadingState('loading', '正在加载首个视频片段...');
+              } else {
+                updateLoadingState('buffering', '正在缓冲视频片段...');
+              }
+            });
+
+            // 当片段加载完成时
+            hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+              if (!hasLoadedFirstFragment) {
+                hasLoadedFirstFragment = true;
+                updateLoadingState('success', '视频加载成功');
+                setPlayVideoLoading(false);
+              }
+            });
+
+            // 当发生错误时
             hls.on(Hls.Events.ERROR, function (event: any, data: any) {
               console.error('HLS Error:', event, data);
+              errorCount++;
+
+              // 如果是网络错误，显示特定消息
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                updateLoadingState('error', '网络连接失败，请检查网络设置');
+              } 
+              // 如果是媒体错误，显示特定消息
+              else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                updateLoadingState('error', '视频格式不支持或文件损坏');
+              }
+              // 其他错误
+              else {
+                updateLoadingState('error', '视频加载失败，请检查网络或切换源');
+              }
+
+              // 如果错误次数过多，停止加载
+              if (errorCount > 3) {
+                setPlayVideoLoading(false);
+              }
+
               if (data.fatal) {
                 switch (data.type) {
                   case Hls.ErrorTypes.NETWORK_ERROR:
@@ -1496,20 +1586,26 @@ function PlayPageClient() {
         if (artPlayerRef.current && !artPlayerRef.current.paused) {
           requestWakeLock();
         }
+        
+        // 更新加载状态
+        updateLoadingState('success', '视频播放已准备就绪');
       });
 
       // 监听播放状态变化，控制 Wake Lock
       artPlayerRef.current.on('play', () => {
         requestWakeLock();
+        updateLoadingState('playing', '正在播放视频');
       });
 
       artPlayerRef.current.on('pause', () => {
         releaseWakeLock();
         saveCurrentPlayProgress();
+        updateLoadingState('buffering', '视频已暂停');
       });
 
       artPlayerRef.current.on('video:ended', () => {
         releaseWakeLock();
+        updateLoadingState('success', '视频播放结束');
       });
 
       // 如果播放器初始化时已经在播放状态，则请求 Wake Lock
@@ -1560,7 +1656,8 @@ function PlayPageClient() {
         }, 0);
 
         // 隐藏换源加载状态
-        setIsVideoLoading(false);
+        setPlayVideoLoading(false);
+        updateLoadingState('success', '视频可以播放');
       });
 
       // 监听视频时间更新事件，实现跳过片头片尾
@@ -1612,6 +1709,7 @@ function PlayPageClient() {
         if (artPlayerRef.current.currentTime > 0) {
           return;
         }
+        updateLoadingState('error', '播放器发生错误，请重试或切换源');
       });
 
       // 监听视频播放结束事件，自动播放下一集
@@ -1623,6 +1721,7 @@ function PlayPageClient() {
             setCurrentEpisodeIndex(idx + 1);
           }, 1000);
         }
+        updateLoadingState('success', '视频播放结束');
       });
 
       artPlayerRef.current.on('video:timeupdate', () => {
@@ -1639,6 +1738,7 @@ function PlayPageClient() {
 
       artPlayerRef.current.on('pause', () => {
         saveCurrentPlayProgress();
+        updateLoadingState('buffering', '视频已暂停');
       });
 
       if (artPlayerRef.current?.video) {
@@ -1899,41 +1999,25 @@ function PlayPageClient() {
                 ></div>
 
                 {/* 换源加载蒙层 */}
-                {isVideoLoading && (
-                  <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl flex items-center justify-center z-[500] transition-all duration-300'>
-                    <div className='text-center max-w-md mx-auto px-6'>
-                      {/* 动画影院图标 */}
-                      <div className='relative mb-8'>
-                        <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-                          <div className='text-white text-4xl'>🎬</div>
-                          {/* 旋转光环 */}
-                          <div className='absolute -inset-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl opacity-20 animate-spin'></div>
-                        </div>
-
-                        {/* 浮动粒子效果 */}
-                        <div className='absolute top-0 left-0 w-full h-full pointer-events-none'>
-                          <div className='absolute top-2 left-2 w-2 h-2 bg-green-400 rounded-full animate-bounce'></div>
-                          <div
-                            className='absolute top-4 right-4 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce'
-                            style={{ animationDelay: '0.5s' }}
-                          ></div>
-                          <div
-                            className='absolute bottom-3 left-6 w-1 h-1 bg-lime-400 rounded-full animate-bounce'
-                            style={{ animationDelay: '1s' }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* 换源消息 */}
-                      <div className='space-y-2'>
-                        <p className='text-xl font-semibold text-white animate-pulse'>
-                          {videoLoadingStage === 'sourceChanging'
-                            ? '🔄 切换播放源...'
-                            : '🔄 视频加载中...'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                {playVideoLoading && (
+                  <LiveLoadingIndicator
+                    loadingState={videoLoadingState}
+                    loadingMessage={videoLoadingMessage}
+                    loadingTime={videoLoadingTime}
+                    proxyStatus={proxyStatus}
+                    onRetry={() => {
+                      if (videoUrl) {
+                        // 重新加载当前视频
+                        if (artPlayerRef.current) {
+                          artPlayerRef.current.switch = videoUrl;
+                        }
+                      }
+                    }}
+                    onSwitchSource={() => {
+                      // 切换到换源面板
+                      setIsEpisodeSelectorCollapsed(false);
+                    }}
+                  />
                 )}
               </div>
             </div>
