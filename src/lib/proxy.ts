@@ -80,12 +80,14 @@ export function buildProxyURL(type: ProxyType, params: ProxyParams): string {
  * @param videoUrl 视频流URL
  * @param source 直播源标识（可选）
  * @param allowCORS 是否允许CORS（可选）
+ * @param userAgent 自定义User-Agent（可选）
  * @returns M3U8代理URL
  */
 export function buildM3U8ProxyURL(
   videoUrl: string,
   source?: string,
-  allowCORS?: boolean
+  allowCORS?: boolean,
+  userAgent?: string
 ): string {
   // 检查videoUrl是否为有效URL
   if (!videoUrl || typeof videoUrl !== 'string' || videoUrl.trim() === '') {
@@ -101,6 +103,10 @@ export function buildM3U8ProxyURL(
 
   if (allowCORS !== undefined) {
     params.allowCORS = allowCORS;
+  }
+
+  if (userAgent) {
+    params.ua = userAgent;
   }
 
   try {

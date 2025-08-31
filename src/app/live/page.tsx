@@ -1147,7 +1147,9 @@ function LivePageClient() {
       const customType = { m3u8: m3u8Loader };
       const targetUrl = buildM3U8ProxyURL(
         videoUrl,
-        currentSourceRef.current?.key
+        currentSourceRef.current?.key,
+        undefined,
+        currentSourceRef.current?.ua
       );
       try {
         // 创建新的播放器实例
