@@ -518,6 +518,10 @@ function LivePageClient() {
     // 重置不支持的类型状态
     setUnsupportedType(null);
 
+    // 设置加载状态
+    setIsVideoLoading(true);
+    updateLoadingState('connecting', '正在切换频道...');
+
     setCurrentChannel(channel);
     setVideoUrl(channel.url);
 
