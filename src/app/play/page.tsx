@@ -219,6 +219,8 @@ function PlayPageClient() {
 
   const artPlayerRef = useRef<any>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
+  // 弹幕插件模块（仅在客户端动态加载，避免 SSR 报错）
+  const danmakuPluginRef = useRef<any>(null);
 
   // Wake Lock 相关
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -246,15 +248,15 @@ function PlayPageClient() {
         batchSources.map(async (source) => {
           try {
             // 检查是否有第一集的播放地址
-            if (!source.episodes || source.episodes.length === 0) {
+            if (!source.episodes || (source.episodes?.length ?? 0) === 0) {
               console.warn(`播放源 ${source.source_name} 没有可用的播放地址`);
               return null;
             }
 
             const episodeUrl =
-              source.episodes.length > 1
-                ? source.episodes[1]
-                : source.episodes[0];
+              (source.episodes?.length ?? 0) > 1
+                ? source.episodes![1]
+                : source.episodes![0];
             const testResult = await getVideoResolutionFromM3u8(episodeUrl);
 
             return {
@@ -432,12 +434,12 @@ function PlayPageClient() {
     if (
       !detailData ||
       !detailData.episodes ||
-      episodeIndex >= detailData.episodes.length
+      episodeIndex >= (detailData.episodes?.length ?? 0)
     ) {
       setVideoUrl('');
       return;
     }
-    const newUrl = detailData?.episodes[episodeIndex] || '';
+    const newUrl = detailData?.episodes?.[episodeIndex] || '';
     if (newUrl !== videoUrl) {
       setVideoUrl(newUrl);
     }
@@ -712,8 +714,8 @@ function PlayPageClient() {
               ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
               : true) &&
             (searchType
-              ? (searchType === 'tv' && result.episodes.length > 1) ||
-              (searchType === 'movie' && result.episodes.length === 1)
+              ? (searchType === 'tv' && (result.episodes?.length ?? 0) > 1) ||
+                (searchType === 'movie' && (result.episodes?.length ?? 0) === 1)
               : true)
         );
         setAvailableSources(results);
@@ -793,7 +795,7 @@ function PlayPageClient() {
       setVideoCover(detailData.poster);
       setVideoDoubanId(detailData.douban_id || 0);
       setDetail(detailData);
-      if (currentEpisodeIndex >= detailData.episodes.length) {
+      if (currentEpisodeIndex >= (detailData.episodes?.length ?? 0)) {
         setCurrentEpisodeIndex(0);
       }
 
@@ -923,7 +925,7 @@ function PlayPageClient() {
       let targetIndex = currentEpisodeIndex;
 
       // 如果当前集数超出新源的范围，则跳转到第一集
-      if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
+      if (!newDetail.episodes || targetIndex >= (newDetail.episodes?.length ?? 0)) {
         targetIndex = 0;
       }
 
@@ -1003,7 +1005,7 @@ function PlayPageClient() {
   const handleNextEpisode = () => {
     const d = detailRef.current;
     const idx = currentEpisodeIndexRef.current;
-    if (d && d.episodes && idx < d.episodes.length - 1) {
+    if (d && d.episodes && idx < (d.episodes?.length ?? 0) - 1) {
       if (artPlayerRef.current && !artPlayerRef.current.paused) {
         saveCurrentPlayProgress();
       }
@@ -1020,7 +1022,7 @@ function PlayPageClient() {
     if (e.altKey && e.key === 'ArrowRight') {
       if (
         detailRef.current?.episodes &&
-        currentEpisodeIndexRef.current < detailRef.current.episodes.length - 1
+        currentEpisodeIndexRef.current < (detailRef.current.episodes?.length ?? 0) - 1
       ) {
         handleNextEpisode();
         e.preventDefault();
@@ -1126,7 +1128,7 @@ function PlayPageClient() {
         year: detailRef.current?.year,
         cover: detailRef.current?.poster || '',
         index: currentEpisodeIndexRef.current + 1, // 转换为1基索引
-        total_episodes: detailRef.current?.episodes.length || 1,
+        total_episodes: (detailRef.current?.episodes?.length ?? 1),
         play_time: Math.floor(currentTime),
         total_time: Math.floor(duration),
         save_time: Date.now(),
@@ -1240,7 +1242,7 @@ function PlayPageClient() {
           source_name: detailRef.current?.source_name || '',
           year: detailRef.current?.year,
           cover: detailRef.current?.poster || '',
-          total_episodes: detailRef.current?.episodes.length || 1,
+          total_episodes: (detailRef.current?.episodes?.length ?? 1),
           save_time: Date.now(),
           search_title: searchTitle,
         });
@@ -1252,6 +1254,7 @@ function PlayPageClient() {
   };
 
   useEffect(() => {
+    (async () => {
     if (
       !Artplayer ||
       !Hls ||
@@ -1267,7 +1270,7 @@ function PlayPageClient() {
     if (
       !detail ||
       !detail.episodes ||
-      currentEpisodeIndex >= detail.episodes.length ||
+      currentEpisodeIndex >= (detail.episodes?.length ?? 0) ||
       currentEpisodeIndex < 0
     ) {
       setError(`选集索引无效，当前共 ${totalEpisodes} 集`);
@@ -1313,12 +1316,22 @@ function PlayPageClient() {
     setPlayVideoLoading(true);
     updateLoadingState('loading', '正在初始化播放器...');
     try {
+      // 在创建实例前，按需动态加载弹幕插件（仅客户端）
+      if (typeof window !== 'undefined' && !danmakuPluginRef.current) {
+        try {
+          const mod = await import('artplayer-plugin-danmuku');
+          danmakuPluginRef.current = (mod as any)?.default || mod;
+        } catch (e) {
+          console.warn('加载弹幕插件失败（忽略并继续）:', e);
+        }
+      }
+
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = true;
 
       artPlayerRef.current = new Artplayer({
-        container: artRef.current,
+        container: artRef.current as HTMLDivElement,
         url: videoUrl,
         poster: videoCover,
         volume: 0.7,
@@ -1351,6 +1364,29 @@ function PlayPageClient() {
         moreVideoAttr: {
           crossOrigin: 'anonymous',
         },
+        // 弹幕插件（可选）
+        plugins: danmakuPluginRef.current
+          ? [
+              danmakuPluginRef.current({
+                danmuku: [],
+                // 配置：速度=7.5，不透明度=0.8，同步播放
+                margin: [10, '75%'], 
+                antiOverlap: true,
+                speed: 7.5,
+                opacity: 0.8,
+                fontSize: 24,
+                synchronousPlayback: true,
+                // 保守的显示策略
+                filter: (dm: any) => (dm?.text?.length ?? 0) < 50,
+                beforeVisible: (dm: any) => {
+                  dm.border = false;
+                  dm.backgroundColor = 'transparent';
+                  return dm;
+                },
+              }),
+            ]
+          : [],
+
         // HLS 支持配置
         customType: {
           m3u8: function (video: HTMLVideoElement, url: string) {
@@ -1692,7 +1728,7 @@ function PlayPageClient() {
         ) {
           if (
             currentEpisodeIndexRef.current <
-            (detailRef.current?.episodes?.length || 1) - 1
+            ((detailRef.current?.episodes?.length ?? 1) - 1)
           ) {
             handleNextEpisode();
           } else {
@@ -1716,7 +1752,7 @@ function PlayPageClient() {
       artPlayerRef.current.on('video:ended', () => {
         const d = detailRef.current;
         const idx = currentEpisodeIndexRef.current;
-        if (d && d.episodes && idx < d.episodes.length - 1) {
+        if (d && d.episodes && idx < (d.episodes?.length ?? 0) - 1) {
           setTimeout(() => {
             setCurrentEpisodeIndex(idx + 1);
           }, 1000);
@@ -1751,6 +1787,7 @@ function PlayPageClient() {
       console.error('创建播放器失败:', err);
       setError('播放器初始化失败');
     }
+    })();
   }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
 
   // 当组件卸载时清理定时器、Wake Lock 和播放器资源
