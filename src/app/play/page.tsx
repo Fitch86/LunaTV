@@ -1248,6 +1248,7 @@ function PlayPageClient() {
         total_time: Math.floor(duration),
         save_time: Date.now(),
         search_title: searchTitle,
+        douban_id: bangumiSubjectId || videoDoubanId || 0, 
       });
 
       lastSaveTimeRef.current = Date.now();

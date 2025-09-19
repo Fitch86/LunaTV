@@ -144,6 +144,7 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                       )
                     }
                     type={record.total_episodes > 1 ? 'tv' : ''}
+                    douban_id={record.douban_id}
                   />
                 </div>
               );
