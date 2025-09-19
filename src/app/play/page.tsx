@@ -4,7 +4,7 @@
 
 import Artplayer from 'artplayer';
 import Hls from 'hls.js';
-import { Heart } from 'lucide-react';
+import { ChevronUp,Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
@@ -21,6 +21,7 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { getDoubanDetails } from '@/lib/douban.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
@@ -59,9 +60,20 @@ function PlayPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SearchResult | null>(null);
 
+  // 豆瓣详情状态
+  const [movieDetails, setMovieDetails] = useState<any>(null);
+  const [loadingMovieDetails, setLoadingMovieDetails] = useState(false);
+
+  // 返回顶部按钮显示状态
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // bangumi详情状态
+  const [bangumiDetails, setBangumiDetails] = useState<any>(null);
+  const [loadingBangumiDetails, setLoadingBangumiDetails] = useState(false);
+
   // 换源加载状态
   const [playVideoLoading, setPlayVideoLoading] = useState(true);
-  const [playVideoLoadingStage, setPlayVideoLoadingStage] = useState<
+  const [_playVideoLoadingStage, setPlayVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
   >('initing');
   
@@ -72,12 +84,7 @@ function PlayPageClient() {
     loadingTime: videoLoadingTime,
     proxyStatus,
     updateLoadingState,
-    smartUpdateState,
     resetLoadingState,
-    recordProxyResponse,
-    recordSegmentRequest,
-    recordError,
-    updateProxyStatus
   } = useVideoLoadingState();
 
   // 收藏状态
@@ -123,7 +130,22 @@ function PlayPageClient() {
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
   const [videoYear, setVideoYear] = useState(searchParams.get('year') || '');
   const [videoCover, setVideoCover] = useState('');
-  const [videoDoubanId, setVideoDoubanId] = useState(0);
+
+  // bangumi ID检测（6位数字）
+  const isBangumiId = (id: number): boolean => {
+    return id > 0 && id.toString().length === 6;
+  };
+  
+  const idFromUrl = parseInt(searchParams.get('douban_id') || '0') || 0;
+  const isInitialIdBangumi = isBangumiId(idFromUrl);
+
+  const [bangumiSubjectId, setBangumiSubjectId] = useState(
+    isInitialIdBangumi ? idFromUrl : 0
+  );
+  const [videoDoubanId, setVideoDoubanId] = useState(
+    isInitialIdBangumi ? 0 : idFromUrl
+  );
+
   // 当前源和ID
   const [currentSource, setCurrentSource] = useState(
     searchParams.get('source') || ''
@@ -151,7 +173,8 @@ function PlayPageClient() {
   const videoYearRef = useRef(videoYear);
   const detailRef = useRef<SearchResult | null>(detail);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
-
+  const videoDoubanIdRef = useRef(videoDoubanId);
+  
   // 同步最新值到 refs
   useEffect(() => {
     currentSourceRef.current = currentSource;
@@ -160,6 +183,7 @@ function PlayPageClient() {
     currentEpisodeIndexRef.current = currentEpisodeIndex;
     videoTitleRef.current = videoTitle;
     videoYearRef.current = videoYear;
+    videoDoubanIdRef.current = videoDoubanId;
   }, [
     currentSource,
     currentId,
@@ -167,7 +191,84 @@ function PlayPageClient() {
     currentEpisodeIndex,
     videoTitle,
     videoYear,
+    videoDoubanId,
   ]);
+
+  // 加载详情（豆瓣或bangumi）
+/*   useEffect(() => {
+    const loadMovieDetails = async () => {
+      if (!videoDoubanId || videoDoubanId === 0 || detail?.source === 'shortdrama') {
+        return;
+      }
+
+      // 检测是否为bangumi ID
+      if (isBangumiId(videoDoubanId)) {
+        // 加载bangumi详情
+        if (loadingBangumiDetails || bangumiDetails) {
+          return;
+        }
+        
+        setLoadingBangumiDetails(true);
+        try {
+          const bangumiData = await fetchBangumiDetails(videoDoubanId);
+          if (bangumiData) {
+            setBangumiDetails(bangumiData);
+          }
+        } catch (error) {
+          console.error('Failed to load bangumi details:', error);
+        } finally {
+          setLoadingBangumiDetails(false);
+        }
+      } else {
+        // 加载豆瓣详情
+        if (loadingMovieDetails || movieDetails) {
+          return;
+        }
+        
+        setLoadingMovieDetails(true);
+        try {
+          const response = await getDoubanDetails(videoDoubanId.toString());
+          if (response.code === 200 && response.data) {
+            setMovieDetails(response.data);
+          }
+        } catch (error) {
+          console.error('Failed to load movie details:', error);
+        } finally {
+          setLoadingMovieDetails(false);
+        }
+      }
+    };
+
+    loadMovieDetails();
+  }, [videoDoubanId, loadingMovieDetails, movieDetails, loadingBangumiDetails, bangumiDetails]); */
+  
+  // First useEffect: Handles loading Bangumi details
+  useEffect(() => {
+    if (!bangumiSubjectId) return; // Only run if there is a Bangumi ID
+
+    setLoadingBangumiDetails(true);
+    fetchBangumiDetails(bangumiSubjectId)
+      .then(data => {
+        if (data) setBangumiDetails(data);
+      })
+      .catch(error => console.error('Failed to load bangumi details:', error))
+    .finally(() => setLoadingBangumiDetails(false));
+  }, [bangumiSubjectId]); // This effect only re-runs if bangumiSubjectId changes
+
+  // Second useEffect: Handles loading Douban details
+  useEffect(() => {
+    if (!videoDoubanId) return; // Only run if there is a Douban ID
+
+    setLoadingMovieDetails(true);
+    getDoubanDetails(videoDoubanId.toString())
+      .then(response => {
+        if (response.code === 200 && response.data) {
+          setMovieDetails(response.data);
+        }
+      })
+      .catch(error => console.error('Failed to load movie details:', error))
+      .finally(() => setLoadingMovieDetails(false));
+  }, [videoDoubanId]); // This effect only re-runs if videoDoubanId changes
 
   // 视频播放地址
   const [videoUrl, setVideoUrl] = useState('');
@@ -229,6 +330,22 @@ function PlayPageClient() {
   // 工具函数（Utils）
   // -----------------------------------------------------------------------------
 
+  // 获取bangumi详情
+  const fetchBangumiDetails = async (bangumiId: number) => {
+
+    try {
+      const response = await fetch(`https://api.bgm.tv/v0/subjects/${bangumiId}`);
+      if (response.ok) {
+        const bangumiData = await response.json();
+      
+        return bangumiData;
+      }
+    } catch (error) {
+      console.log('Failed to fetch bangumi details:', error);
+    }
+    return null;
+  };
+
   // 播放源优选函数
   const preferBestSource = async (
     sources: SearchResult[]
@@ -253,10 +370,8 @@ function PlayPageClient() {
               return null;
             }
 
-            const episodeUrl =
-              (source.episodes?.length ?? 0) > 1
-                ? source.episodes![1]
-                : source.episodes![0];
+            const eps = source.episodes ?? [];
+            const episodeUrl = eps[(eps.length > 1) ? 1 : 0];
             const testResult = await getVideoResolutionFromM3u8(episodeUrl);
 
             return {
@@ -1441,7 +1556,7 @@ function PlayPageClient() {
             });
 
             // 当开始加载片段时
-            hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+            hls.on(Hls.Events.FRAG_LOADING, (_event, _data) => {
               if (!hasLoadedFirstFragment) {
                 updateLoadingState('loading', '正在加载首个视频片段...');
               } else {
@@ -1450,7 +1565,7 @@ function PlayPageClient() {
             });
 
             // 当片段加载完成时
-            hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+            hls.on(Hls.Events.FRAG_LOADED, (_event, _data) => {
               if (!hasLoadedFirstFragment) {
                 hasLoadedFirstFragment = true;
                 updateLoadingState('success', '视频加载成功');
@@ -1806,6 +1921,58 @@ function PlayPageClient() {
     };
   }, []);
 
+  // 返回顶部功能相关
+  useEffect(() => {
+    // 获取滚动位置的函数 - 专门针对 body 滚动
+    const getScrollTop = () => {
+      return document.body.scrollTop || 0;
+    };
+
+    // 使用 requestAnimationFrame 持续检测滚动位置
+    let isRunning = false;
+    const checkScrollPosition = () => {
+      if (!isRunning) return;
+
+      const scrollTop = getScrollTop();
+      const shouldShow = scrollTop > 300;
+      setShowBackToTop(shouldShow);
+
+      requestAnimationFrame(checkScrollPosition);
+    };
+
+    // 启动持续检测
+    isRunning = true;
+    checkScrollPosition();
+
+    // 监听 body 元素的滚动事件
+    const handleScroll = () => {
+      const scrollTop = getScrollTop();
+      setShowBackToTop(scrollTop > 300);
+    };
+
+    document.body.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      isRunning = false; // 停止 requestAnimationFrame 循环
+      // 移除 body 滚动事件监听器
+      document.body.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // 返回顶部功能
+  const scrollToTop = () => {
+    try {
+      // 根据调试结果，真正的滚动容器是 document.body
+      document.body.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      });
+    } catch (error) {
+      // 如果平滑滚动完全失败，使用立即滚动
+      document.body.scrollTop = 0;
+    }
+  };
+
   if (loading) {
     return (
       <PageLayout activePath='/play'>
@@ -2120,13 +2287,209 @@ function PlayPageClient() {
                 )}
                 {detail?.type_name && <span>{detail.type_name}</span>}
               </div>
+
+              {/* 详细信息（豆瓣或bangumi） */}
+              {currentSource !== 'shortdrama' && videoDoubanId && videoDoubanId !== 0 && detail && detail.source !== 'shortdrama' && (
+                <div className='mb-4 flex-shrink-0'>
+                  {/* 加载状态 */}
+                  {(loadingMovieDetails || loadingBangumiDetails) && !movieDetails && !bangumiDetails && (
+                    <div className='animate-pulse'>
+                      <div className='h-4 bg-gray-300 rounded w-64 mb-2'></div>
+                      <div className='h-4 bg-gray-300 rounded w-48'></div>
+                    </div>
+                  )}
+                  
+                  {/* Bangumi详情 */}
+                  {bangumiDetails && (
+                    <div className='space-y-2 text-sm'>
+                      {/* Bangumi评分 */}
+                      {bangumiDetails.rating?.score && parseFloat(bangumiDetails.rating.score) > 0 && (
+                        <div className='flex items-center gap-2'>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>Bangumi评分: </span>
+                          <div className='flex items-center'>
+                            <span className='text-yellow-600 dark:text-yellow-400 font-bold text-base'>
+                              {bangumiDetails.rating.score}
+                            </span>
+                            <div className='flex ml-1'>
+                              {[...Array(5)].map((_, i) => (
+                                <svg
+                                  key={i}
+                                  className={`w-3 h-3 ${
+                                    i < Math.floor(parseFloat(bangumiDetails.rating.score) / 2)
+                                      ? 'text-yellow-500'
+                                      : 'text-gray-300 dark:text-gray-600'
+                                  }`}
+                                  fill='currentColor'
+                                  viewBox='0 0 20 20'
+                                >
+                                  <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
+                                </svg>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 制作信息从infobox提取 */}
+                      {bangumiDetails.infobox && bangumiDetails.infobox.map((info: any, index: number) => {
+                        if (info.key === '导演' && info.value) {
+                          const directors = Array.isArray(info.value) ? info.value.map((v: any) => v.v || v).join('、') : info.value;
+                          return (
+                            <div key={index}>
+                              <span className='font-semibold text-gray-700 dark:text-gray-300'>导演: </span>
+                              <span className='text-gray-600 dark:text-gray-400'>{directors}</span>
+                            </div>
+                          );
+                        }
+                        if (info.key === '制作' && info.value) {
+                          const studios = Array.isArray(info.value) ? info.value.map((v: any) => v.v || v).join('、') : info.value;
+                          return (
+                            <div key={index}>
+                              <span className='font-semibold text-gray-700 dark:text-gray-300'>制作: </span>
+                              <span className='text-gray-600 dark:text-gray-400'>{studios}</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                      
+                      {/* 播出日期 */}
+                      {bangumiDetails.date && (
+                        <div>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>播出日期: </span>
+                          <span className='text-gray-600 dark:text-gray-400'>{bangumiDetails.date}</span>
+                        </div>
+                      )}
+                      
+                      {/* 标签信息 */}
+                      <div className='flex flex-wrap gap-2 mt-3'>
+                        {bangumiDetails.tags && bangumiDetails.tags.slice(0, 4).map((tag: any, index: number) => (
+                          <span key={index} className='bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-xs'>
+                            {tag.name}
+                          </span>
+                        ))}
+                        {bangumiDetails.total_episodes && (
+                          <span className='bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded-full text-xs'>
+                            共{bangumiDetails.total_episodes}话
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 豆瓣详情 */}
+                  {movieDetails && !bangumiDetails && (
+                    <div className='space-y-2 text-sm'>
+                      {/* 豆瓣评分 */}
+                      {movieDetails.rate && movieDetails.rate !== "0" && parseFloat(movieDetails.rate) > 0 && (
+                        <div className='flex items-center gap-2'>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>豆瓣评分: </span>
+                          <div className='flex items-center'>
+                            <span className='text-yellow-600 dark:text-yellow-400 font-bold text-base'>
+                              {movieDetails.rate}
+                            </span>
+                            <div className='flex ml-1'>
+                              {[...Array(5)].map((_, i) => (
+                                <svg
+                                  key={i}
+                                  className={`w-3 h-3 ${
+                                    i < Math.floor(parseFloat(movieDetails.rate) / 2)
+                                      ? 'text-yellow-500'
+                                      : 'text-gray-300 dark:text-gray-600'
+                                  }`}
+                                  fill='currentColor'
+                                  viewBox='0 0 20 20'
+                                >
+                                  <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
+                                </svg>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 导演 */}
+                      {movieDetails.directors && movieDetails.directors.length > 0 && (
+                        <div>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>导演: </span>
+                          <span className='text-gray-600 dark:text-gray-400'>
+                            {movieDetails.directors.join('、')}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 编剧 */}
+                      {movieDetails.screenwriters && movieDetails.screenwriters.length > 0 && (
+                        <div>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>编剧: </span>
+                          <span className='text-gray-600 dark:text-gray-400'>
+                            {movieDetails.screenwriters.join('、')}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 主演 */}
+                      {movieDetails.cast && movieDetails.cast.length > 0 && (
+                        <div>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>主演: </span>
+                          <span className='text-gray-600 dark:text-gray-400'>
+                            {movieDetails.cast.join('、')}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 首播日期 */}
+                      {movieDetails.first_aired && (
+                        <div>
+                          <span className='font-semibold text-gray-700 dark:text-gray-300'>
+                            {movieDetails.episodes ? '首播' : '上映'}: 
+                          </span>
+                          <span className='text-gray-600 dark:text-gray-400'>
+                            {movieDetails.first_aired}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 标签信息 */}
+                      <div className='flex flex-wrap gap-2 mt-3'>
+                        {movieDetails.countries && movieDetails.countries.slice(0, 2).map((country: string, index: number) => (
+                          <span key={index} className='bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-xs'>
+                            {country}
+                          </span>
+                        ))}
+                        {movieDetails.languages && movieDetails.languages.slice(0, 2).map((language: string, index: number) => (
+                          <span key={index} className='bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded-full text-xs'>
+                            {language}
+                          </span>
+                        ))}
+                        {movieDetails.episodes && (
+                          <span className='bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded-full text-xs'>
+                            共{movieDetails.episodes}集
+                          </span>
+                        )}
+                        {movieDetails.episode_length && (
+                          <span className='bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 px-2 py-1 rounded-full text-xs'>
+                            单集{movieDetails.episode_length}分钟
+                          </span>
+                        )}
+                        {movieDetails.movie_duration && (
+                          <span className='bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 px-2 py-1 rounded-full text-xs'>
+                            {movieDetails.movie_duration}分钟
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {/* 剧情简介 */}
-              {detail?.desc && (
+              {(detail?.desc || bangumiDetails?.summary) && (
                 <div
                   className='mt-0 text-base leading-relaxed opacity-90 overflow-y-auto pr-2 flex-1 min-h-0 scrollbar-hide'
                   style={{ whiteSpace: 'pre-line' }}
                 >
-                  {detail.desc}
+                  {bangumiDetails?.summary || detail?.desc}
                 </div>
               )}
             </div>
@@ -2136,23 +2499,27 @@ function PlayPageClient() {
           <div className='hidden md:block md:col-span-1 md:order-first'>
             <div className='pl-0 py-4 pr-6'>
               <div className='relative bg-gray-300 dark:bg-gray-700 aspect-[2/3] flex items-center justify-center rounded-xl overflow-hidden'>
-                {videoCover ? (
+                {(videoCover || bangumiDetails?.images?.large) ? (
                   <>
                     <img
-                      src={processImageUrl(videoCover)}
+                      src={processImageUrl(bangumiDetails?.images?.large || videoCover)}
                       alt={videoTitle}
                       className='w-full h-full object-cover'
                     />
 
-                    {/* 豆瓣链接按钮 */}
+                    {/* 链接按钮（bangumi或豆瓣） */}
                     {videoDoubanId !== 0 && (
                       <a
-                        href={`https://movie.douban.com/subject/${videoDoubanId.toString()}`}
+                        href={
+                          bangumiDetails 
+                            ? `https://bgm.tv/subject/${bangumiSubjectId.toString()}`
+                            : `https://movie.douban.com/subject/${videoDoubanId.toString()}`
+                        }
                         target='_blank'
                         rel='noopener noreferrer'
                         className='absolute top-3 left-3'
                       >
-                        <div className='bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-green-600 hover:scale-[1.1] transition-all duration-300 ease-out'>
+                        <div className={`${bangumiDetails ? 'bg-pink-500 hover:bg-pink-600' : 'bg-green-500 hover:bg-green-600'} text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:scale-[1.1] transition-all duration-300 ease-out`}>
                           <svg
                             width='16'
                             height='16'
@@ -2180,6 +2547,19 @@ function PlayPageClient() {
           </div>
         </div>
       </div>
+
+      {/* 返回顶部悬浮按钮 */}
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-20 md:bottom-6 right-6 z-[500] w-12 h-12 bg-green-500/90 hover:bg-green-500 text-white rounded-full shadow-lg backdrop-blur-sm transition-all duration-300 ease-in-out flex items-center justify-center group ${
+          showBackToTop
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        aria-label='返回顶部'
+      >
+        <ChevronUp className='w-6 h-6 transition-transform group-hover:scale-110' />
+      </button>
     </PageLayout>
   );
 }
