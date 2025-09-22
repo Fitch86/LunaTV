@@ -2,7 +2,7 @@
 
 'use client';
 
-import { CURRENT_VERSION } from "@/lib/version";
+import { CURRENT_VERSION } from '@/lib/version';
 
 // 版本检查结果枚举
 export enum UpdateStatus {
@@ -109,28 +109,16 @@ export function compareVersions(remoteVersion: string): UpdateStatus {
       return num;
     });
 
-    // 标准化版本号到3个部分
-    const normalizeVersion = (parts: number[]) => {
-      if (parts.length >= 3) {
-        return parts.slice(0, 3); // 取前三个元素
-      } else {
-        // 不足3个的部分补0
-        const normalized = [...parts];
-        while (normalized.length < 3) {
-          normalized.push(0);
-        }
-        return normalized;
-      }
-    };
+    // 逐级比较版本号，处理不同长度的版本字符串
+    const maxLength = Math.max(currentParts.length, remoteParts.length);
+    for (let i = 0; i < maxLength; i++) {
+      const current = currentParts[i] || 0; // 不足的部分补0
+      const remote = remoteParts[i] || 0; // 不足的部分补0
 
-    const normalizedCurrent = normalizeVersion(currentParts);
-    const normalizedRemote = normalizeVersion(remoteParts);
-
-    // 逐级比较版本号
-    for (let i = 0; i < 3; i++) {
-      if (normalizedRemote[i] > normalizedCurrent[i]) {
+      if (remote > current) {
         return UpdateStatus.HAS_UPDATE;
-      } else if (normalizedRemote[i] < normalizedCurrent[i]) {
+      }
+      if (remote < current) {
         return UpdateStatus.NO_UPDATE;
       }
       // 如果当前级别相等，继续比较下一级

@@ -114,20 +114,17 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
     const versions: RemoteChangelogEntry[] = [];
     let currentVersion: RemoteChangelogEntry | null = null;
     let currentSection: string | null = null;
-    let inVersionContent = false;
+
+    // This regex correctly handles the version format: ## [YYYY.MM.DD.NN] - YYYY-MM-DD
+    const versionRegex = /^##\s+\[([\d.]+)\]\s+-\s+(\d{4}-\d{2}-\d{2})$/;
 
     for (const line of lines) {
-      const trimmedLine = line.trim();
+      const versionMatch = line.match(versionRegex);
 
-      // 匹配版本行: ## [X.Y.Z] - YYYY-MM-DD
-      const versionMatch = trimmedLine.match(
-        /^## \[([\d.]+)\] - (\d{4}-\d{2}-\d{2})$/
-      );
       if (versionMatch) {
         if (currentVersion) {
           versions.push(currentVersion);
         }
-
         currentVersion = {
           version: versionMatch[1],
           date: versionMatch[2],
@@ -135,40 +132,39 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
           changed: [],
           fixed: [],
         };
-        currentSection = null;
-        inVersionContent = true;
+        currentSection = null; // Reset section for the new version
         continue;
       }
 
-      // 如果遇到下一个版本或到达文件末尾，停止处理当前版本
-      if (inVersionContent && currentVersion) {
-        // 匹配章节标题
-        if (trimmedLine === '### Added') {
+      if (currentVersion) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('### Added')) {
           currentSection = 'added';
-          continue;
-        } else if (trimmedLine === '### Changed') {
+        } else if (trimmedLine.startsWith('### Changed')) {
           currentSection = 'changed';
-          continue;
-        } else if (trimmedLine === '### Fixed') {
+        } else if (trimmedLine.startsWith('### Fixed')) {
           currentSection = 'fixed';
-          continue;
-        }
-
-        // 匹配条目: - 内容
-        if (trimmedLine.startsWith('- ') && currentSection) {
+        } else if (trimmedLine.startsWith('- ') && currentSection) {
           const entry = trimmedLine.substring(2);
-          if (currentSection === 'added') {
-            currentVersion.added.push(entry);
-          } else if (currentSection === 'changed') {
-            currentVersion.changed.push(entry);
-          } else if (currentSection === 'fixed') {
-            currentVersion.fixed.push(entry);
+          if (
+            currentVersion[
+              currentSection as keyof Omit<
+                RemoteChangelogEntry,
+                'version' | 'date'
+              >
+            ]
+          ) {
+            currentVersion[
+              currentSection as keyof Omit<
+                RemoteChangelogEntry,
+                'version' | 'date'
+              >
+            ].push(entry);
           }
         }
       }
     }
 
-    // 添加最后一个版本
     if (currentVersion) {
       versions.push(currentVersion);
     }
@@ -187,12 +183,13 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
     return (
       <div
         key={entry.version}
-        className={`p-4 rounded-lg border ${isCurrentVersion
-          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-          : isUpdate
+        className={`p-4 rounded-lg border ${
+          isCurrentVersion
+            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+            : isUpdate
             ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
             : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
-          }`}
+        }`}
       >
         {/* 版本标题 */}
         <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
@@ -444,10 +441,11 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                       .map((entry, index) => (
                         <div
                           key={index}
-                          className={`p-4 rounded-lg border ${entry.version === latestVersion
-                            ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-                            : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
-                            }`}
+                          className={`p-4 rounded-lg border ${
+                            entry.version === latestVersion
+                              ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                              : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
+                          }`}
                         >
                           <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
                             <div className='flex flex-wrap items-center gap-2'>
