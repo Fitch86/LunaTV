@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // 内存缓存存储
-const cache = new Map<string, { data: any; expireAt: number }>();
+interface CacheItem {
+  data: unknown;
+  expireAt: number;
+}
+
+const cache = new Map<string, CacheItem>();
 
 // 清理过期缓存的定时器
 let cleanupTimer: NodeJS.Timeout | null = null;
@@ -12,11 +17,12 @@ function startCleanup() {
   
   cleanupTimer = setInterval(() => {
     const now = Date.now();
-    for (const [key, item] of cache.entries()) {
+    // 使用 Array.from 来避免迭代器问题
+    Array.from(cache.entries()).forEach(([key, item]) => {
       if (item.expireAt <= now) {
         cache.delete(key);
       }
-    }
+    });
   }, 60000); // 每分钟清理一次
 }
 
@@ -60,7 +66,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('设置缓存失败:', error);
+    // 在生产环境中记录错误但不输出到控制台
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.error('设置缓存失败:', error);
+    }
     return NextResponse.json({ error: 'Failed to set cache' }, { status: 500 });
   }
 }
@@ -77,20 +87,20 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } else if (prefix) {
     // 删除指定前缀的所有缓存项
-    for (const cacheKey of cache.keys()) {
+    Array.from(cache.keys()).forEach((cacheKey) => {
       if (cacheKey.startsWith(prefix)) {
         cache.delete(cacheKey);
       }
-    }
+    });
     return NextResponse.json({ success: true });
   } else {
     // 清理所有过期缓存
     const now = Date.now();
-    for (const [cacheKey, item] of cache.entries()) {
+    Array.from(cache.entries()).forEach(([cacheKey, item]) => {
       if (item.expireAt <= now) {
         cache.delete(cacheKey);
       }
-    }
+    });
     return NextResponse.json({ success: true });
   }
 }

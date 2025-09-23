@@ -69,17 +69,15 @@ function LivePageClient() {
 
   // 使用新的加载状态Hook
   const {
-    loadingState: videoLoadingState,
+    loadingState: _loadingState,
     loadingMessage: videoLoadingMessage,
-    loadingTime: videoLoadingTime,
+    loadingTime: _loadingTime,
     proxyStatus,
     updateLoadingState,
-    smartUpdateState,
     resetLoadingState,
-    recordProxyResponse,
     recordSegmentRequest,
     recordError,
-    updateProxyStatus,
+    updateProxyStatus: _updateProxyStatus,
     isSourceLikelyFailed,
     hasLoadingHope
   } = useVideoLoadingState();
@@ -903,13 +901,6 @@ function LivePageClient() {
         
         // 包装回调函数以监控响应
         callbacks.onSuccess = function(response: any, stats: any, context: any, networkDetails: any) {
-          // 记录代理响应
-          recordProxyResponse();
-          
-          // 如果是segment请求，记录segment请求
-          if (context.type === 'segment') {
-            recordSegmentRequest();
-          }
           
           // 调用原始回调
           originalCallbacks.onSuccess(response, stats, context, networkDetails);
@@ -946,7 +937,7 @@ function LivePageClient() {
 
     // 重置加载状态
     resetLoadingState();
-    smartUpdateState('connecting', '正在连接视频源...');
+    updateLoadingState('connecting', '正在连接视频源...');
 
     // 清理之前的 HLS 实例
     if (video.hls) {
@@ -973,7 +964,7 @@ function LivePageClient() {
     video.hls = hls;
 
     // 监听HLS事件以更新加载状态
-    let fragmentLoadStartTime = 0;
+    let _fragmentLoadStartTime = 0;
     let hasLoadedFirstFragment = false;
     let errorCount = 0;
     let lastEventTime = Date.now();
@@ -1003,29 +994,28 @@ function LivePageClient() {
     hls.on(Hls.Events.MANIFEST_LOADING, () => {
       updateLastEventTime();
       setIsVideoLoading(true);
-      smartUpdateState('connecting', '正在连接视频源...');
+      updateLoadingState('connecting', '正在连接视频源...');
     });
 
     // 当M3U8清单加载完成时
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
       updateLastEventTime();
-      recordProxyResponse();
-      smartUpdateState('loading', '正在解析播放列表...');
+      updateLoadingState('loading', '正在解析播放列表...');
     });
 
     // 当开始加载片段时
-    hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+    hls.on(Hls.Events.FRAG_LOADING, (_event, _data) => {
       updateLastEventTime();
-      fragmentLoadStartTime = Date.now();
+      _fragmentLoadStartTime = Date.now();
       if (!hasLoadedFirstFragment) {
-        smartUpdateState('loading', '正在加载首个视频片段...');
+        updateLoadingState('loading', '正在加载首个视频片段...');
       } else {
-        smartUpdateState('buffering', '正在缓冲视频片段...');
+        updateLoadingState('buffering', '正在缓冲视频片段...');
       }
     });
 
     // 当片段加载完成时
-    hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+    hls.on(Hls.Events.FRAG_LOADED, (_event, _data) => {
       updateLastEventTime();
       recordSegmentRequest();
       if (!hasLoadedFirstFragment) {
@@ -1089,7 +1079,7 @@ function LivePageClient() {
     // 当播放器可以播放时
     hls.on(Hls.Events.MEDIA_ATTACHED, () => {
       updateLastEventTime();
-      smartUpdateState('loading', '正在准备播放...');
+      updateLoadingState('loading', '正在准备播放...');
     });
 
     // 清理函数
@@ -1574,9 +1564,9 @@ function LivePageClient() {
                 {/* 视频加载蒙层 */}
                 {isVideoLoading && (
                   <LiveLoadingIndicator 
-                    loadingState={videoLoadingState}
+                    loadingState={_loadingState}
                     loadingMessage={videoLoadingMessage}
-                    loadingTime={videoLoadingTime}
+                    loadingTime={_loadingTime}
                     proxyStatus={proxyStatus}
                     isSourceLikelyFailed={isSourceLikelyFailed}
                     hasLoadingHope={hasLoadingHope}

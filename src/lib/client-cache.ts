@@ -1,5 +1,5 @@
 export class ClientCache {
-  static async get(key: string): Promise<any | null> {
+  static async get(key: string): Promise<unknown | null> {
     try {
       const response = await fetch(`/api/cache?key=${encodeURIComponent(key)}`);
       if (!response.ok) {
@@ -8,12 +8,14 @@ export class ClientCache {
       const result = await response.json();
       return result.data;
     } catch (error) {
-      console.error('获取缓存失败:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('获取缓存失败:', error);
+      }
       return null;
     }
   }
 
-  static async set(key: string, data: any, expireSeconds?: number): Promise<void> {
+  static async set(key: string, data: unknown, expireSeconds?: number): Promise<void> {
     try {
       const response = await fetch('/api/cache', {
         method: 'POST',
@@ -26,7 +28,9 @@ export class ClientCache {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
     } catch (error) {
-      console.error('设置缓存失败:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('设置缓存失败:', error);
+      }
       throw error;
     }
   }
@@ -40,7 +44,9 @@ export class ClientCache {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
     } catch (error) {
-      console.error('删除缓存失败:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('删除缓存失败:', error);
+      }
       throw error;
     }
   }
@@ -55,7 +61,9 @@ export class ClientCache {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
     } catch (error) {
-      console.error('清理过期缓存失败:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('清理过期缓存失败:', error);
+      }
       throw error;
     }
   }

@@ -74,9 +74,9 @@ function PlayPageClient() {
 
   // 换源加载状态
   const [playVideoLoading, setPlayVideoLoading] = useState(true);
-  const [_playVideoLoadingStage, setPlayVideoLoadingStage] = useState<
-    'initing' | 'sourceChanging'
-  >('initing');
+  const [_playVideoLoadingStage] = useState<
+    'idle' | 'connecting' | 'buffering' | 'ready'
+  >('idle');
   
   // 使用新的加载状态Hook
   const {
@@ -153,7 +153,7 @@ function PlayPageClient() {
   const idFromUrl = parseInt(searchParams.get('douban_id') || '0') || 0;
   const isInitialIdBangumi = isBangumiId(idFromUrl);
 
-  const [bangumiSubjectId, setBangumiSubjectId] = useState(
+  const [bangumiSubjectId] = useState(
     isInitialIdBangumi ? idFromUrl : 0
   );
   const [videoDoubanId, setVideoDoubanId] = useState(
@@ -287,7 +287,7 @@ function PlayPageClient() {
       const cacheKey = `${DANMU_CACHE_KEY_PREFIX}-${key}`;
       // 优先从统一存储获取
       const cached = await ClientCache.get(cacheKey);
-      if (cached) return cached;
+      if (cached) return cached as { data: any[]; timestamp: number };
       
       // 兜底：从localStorage获取（兼容性）
       if (typeof localStorage !== 'undefined') {
@@ -866,7 +866,7 @@ function PlayPageClient() {
   }
 
   // 🚀 优化的弹幕操作处理函数（防抖 + 性能优化）
-  const handleDanmuOperationOptimized = (nextState: boolean) => {
+  const _handleDanmuOperationOptimized = (nextState: boolean) => {
     // 清除之前的防抖定时器
     if (danmuOperationTimeoutRef.current) {
       clearTimeout(danmuOperationTimeoutRef.current);
@@ -1379,8 +1379,8 @@ function PlayPageClient() {
       isSourceChangingRef.current = true;
 
       // 显示换源加载状态
-      setVideoLoadingStage('sourceChanging');
-      setIsVideoLoading(true);
+      setPlayVideoLoading(true);
+      updateLoadingState('loading', '正在切换播放源...');
 
       // 🚀 立即重置弹幕相关状态，避免残留
       lastDanmuLoadKeyRef.current = '';
@@ -1569,7 +1569,8 @@ function PlayPageClient() {
       isSourceChangingRef.current = false;
 
       // 隐藏换源加载状态
-      setIsVideoLoading(false);
+      setPlayVideoLoading(false);
+      updateLoadingState('error', '换源失败');
       setError(err instanceof Error ? err.message : '换源失败');
     }
   }
