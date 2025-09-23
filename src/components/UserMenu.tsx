@@ -3,6 +3,8 @@
 'use client';
 
 import {
+  BarChart3,
+  Calendar,
   Check,
   ChevronDown,
   ExternalLink,
@@ -273,6 +275,16 @@ export const UserMenu: React.FC = () => {
     router.push('/admin');
   };
 
+  const handlePlayStats = () => {
+    setIsOpen(false);
+    router.push('/play-stats');
+  };
+
+  const handleReleaseCalendar = () => {
+    setIsOpen(false);
+    router.push('/release-calendar');
+  };
+
   const handleChangePassword = () => {
     setIsOpen(false);
     setIsChangePasswordOpen(true);
@@ -454,6 +466,9 @@ export const UserMenu: React.FC = () => {
   const showAdminPanel =
     authInfo?.role === 'owner' || authInfo?.role === 'admin';
 
+  // 检查是否显示播放统计按钮（所有登录用户，且非localstorage存储）
+  const showPlayStats = authInfo?.username && storageType !== 'localstorage';
+
   // 检查是否显示修改密码按钮
   const showChangePassword =
     authInfo?.role !== 'owner' && storageType !== 'localstorage';
@@ -534,6 +549,28 @@ export const UserMenu: React.FC = () => {
               <span className='font-medium'>管理面板</span>
             </button>
           )}
+
+          {/* 播放统计按钮 */}
+          {showPlayStats && (
+            <button
+              onClick={handlePlayStats}
+              className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+            >
+              <BarChart3 className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+              <span className='font-medium'>
+                {authInfo?.role === 'owner' || authInfo?.role === 'admin' ? '播放统计' : '个人统计'}
+              </span>
+            </button>
+          )}
+
+          {/* 上映日程按钮 */}
+          <button
+            onClick={handleReleaseCalendar}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+          >
+            <Calendar className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+            <span className='font-medium'>上映日程</span>
+          </button>
 
           {/* 修改密码按钮 */}
           {showChangePassword && (
