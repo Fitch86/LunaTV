@@ -81,7 +81,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
   const fetchRemoteChangelog = async () => {
     try {
       const response = await fetch(
-        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/danmu/CHANGELOG'
+        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newdanmu/CHANGELOG'
       );
       if (response.ok) {
         const content = await response.text();
@@ -360,7 +360,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                     </div>
                   </div>
                   <a
-                    href='https://github.com/Fitch86/LunaTV/tree/danmu'
+                    href='https://github.com/Fitch86/LunaTV/tree/newdanmu'
                     target='_blank'
                     rel='noopener noreferrer'
                     className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
