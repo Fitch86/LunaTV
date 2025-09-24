@@ -11,6 +11,19 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2025.09.24.01",
+    date: "2025-09-24",
+    added: [
+    "增加短剧类别"
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+      // 无修复内容
+    ]
+  },
+  {
     version: "2025.09.23.02",
     date: "2025-09-23",
     added: [

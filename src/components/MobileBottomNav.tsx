@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Cat, Clover, Film, Home, Radio, Star, Tv } from 'lucide-react';
+import { Cat, Clover, Film, Home, PlaySquare, Radio, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -31,6 +31,11 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
       icon: Tv,
       label: '剧集',
       href: '/douban?type=tv',
+    },
+    {
+      icon: PlaySquare,
+      label: '短剧',
+      href: '/shortdrama',
     },
     {
       icon: Cat,

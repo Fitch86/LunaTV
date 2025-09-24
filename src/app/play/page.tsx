@@ -596,7 +596,7 @@ function PlayPageClient() {
   };
 
   // 更新视频地址
-  const updateVideoUrl = (
+  const updateVideoUrl = async (
     detailData: SearchResult | null,
     episodeIndex: number
   ) => {
@@ -608,9 +608,38 @@ function PlayPageClient() {
       setVideoUrl('');
       return;
     }
-    const newUrl = detailData?.episodes?.[episodeIndex] || '';
-    if (newUrl !== videoUrl) {
-      setVideoUrl(newUrl);
+
+    const episodeData = detailData.episodes[episodeIndex];
+
+    // 检查是否为短剧格式
+    if (episodeData && episodeData.startsWith('shortdrama:')) {
+      try {
+        const [, videoId, episode] = episodeData.split(':');
+        const response = await fetch(
+          `/api/shortdrama/parse?id=${videoId}&episode=${episode}`
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          const newUrl = result.url || '';
+          if (newUrl !== videoUrl) {
+            setVideoUrl(newUrl);
+          }
+        } else {
+          setError('短剧解析失败');
+          setVideoUrl('');
+        }
+      } catch (err) {
+        console.error('短剧URL解析失败:', err);
+        setError('短剧解析失败');
+        setVideoUrl('');
+      }
+    } else {
+      // 普通视频格式
+      const newUrl = episodeData || '';
+      if (newUrl !== videoUrl) {
+        setVideoUrl(newUrl);
+      }
     }
   };
 
@@ -1170,9 +1199,18 @@ function PlayPageClient() {
       id: string
     ): Promise<SearchResult[]> => {
       try {
-        const detailResponse = await fetch(
-          `/api/detail?source=${source}&id=${id}`
-        );
+        let detailResponse;
+
+        // 判断是否为短剧源
+        if (source === 'shortdrama') {
+          detailResponse = await fetch(
+            `/api/shortdrama/detail?id=${id}&episode=1`
+          );
+        } else {
+          detailResponse = await fetch(
+            `/api/detail?source=${source}&id=${id}`
+          );
+        }
         if (!detailResponse.ok) {
           throw new Error('获取视频详情失败');
         }
@@ -3032,7 +3070,29 @@ function PlayPageClient() {
                   )}
                 </div>
               )}
-              
+
+              {/* 短剧详细信息 */}
+              {detail?.source === 'shortdrama' && (
+                <div className='mb-4 flex-shrink-0'>
+                  <div className='space-y-2 text-sm'>
+                    {/* 集数信息 */}
+                    {detail?.episodes && detail.episodes.length > 0 && (
+                      <div className='flex flex-wrap gap-2'>
+                        <span className='bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-xs'>
+                          共{detail.episodes.length}集
+                        </span>
+                        <span className='bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded-full text-xs'>
+                          短剧
+                        </span>
+                        <span className='bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded-full text-xs'>
+                          {detail.year}年
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* 剧情简介 */}
               {(detail?.desc || bangumiDetails?.summary) && (
                 <div
