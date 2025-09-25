@@ -298,11 +298,12 @@ function DoubanPageClient() {
               id: item.id?.toString() || '',
               title: item.name_cn || item.name,
               poster:
-                item.images.large ||
-                item.images.common ||
-                item.images.medium ||
-                item.images.small ||
-                item.images.grid,
+                item.images?.large ||
+                item.images?.common ||
+                item.images?.medium ||
+                item.images?.small ||
+                item.images?.grid ||
+                '/placeholder.jpg',
               rate: item.rating?.score?.toFixed(1) || '',
               year: item.air_date?.split('-')?.[0] || '',
             })),
