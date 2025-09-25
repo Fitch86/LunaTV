@@ -432,11 +432,12 @@ function HomeClient() {
                               from='douban'
                               title={anime.name_cn || anime.name}
                               poster={
-                                anime.images.large ||
-                                anime.images.common ||
-                                anime.images.medium ||
-                                anime.images.small ||
-                                anime.images.grid
+                                anime.images?.large ||
+                                anime.images?.common ||
+                                anime.images?.medium ||
+                                anime.images?.small ||
+                                anime.images?.grid ||
+                                '/placeholder.jpg'
                               }
                               douban_id={anime.id}
                               rate={anime.rating?.score?.toFixed(1) || ''}
