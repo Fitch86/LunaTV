@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom';
 
 import { changelog, ChangelogEntry } from '@/lib/changelog';
 import { CURRENT_VERSION } from '@/lib/version';
-import { compareVersions, UpdateStatus } from '@/lib/version_check';
+import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 
 interface VersionPanelProps {
   isOpen: boolean;
@@ -70,10 +70,11 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
     }
   }, [isOpen]);
 
-  // 获取远程变更日志
+  // 获取远程变更日志和检查版本更新
   useEffect(() => {
     if (isOpen) {
       fetchRemoteChangelog();
+      checkVersionUpdate();
     }
   }, [isOpen]);
 
@@ -88,13 +89,10 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
         const parsed = parseChangelog(content);
         setRemoteChangelog(parsed);
 
-        // 检查是否有更新
+        // 设置最新版本号
         if (parsed.length > 0) {
           const latest = parsed[0];
           setLatestVersion(latest.version);
-          setIsHasUpdate(
-            compareVersions(latest.version) === UpdateStatus.HAS_UPDATE
-          );
         }
       } else {
         console.error(
@@ -105,6 +103,16 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
       }
     } catch (error) {
       console.error('获取远程变更日志失败:', error);
+    }
+  };
+
+  // 独立的版本检查
+  const checkVersionUpdate = async () => {
+    try {
+      const updateStatus = await checkForUpdates();
+      setIsHasUpdate(updateStatus === UpdateStatus.HAS_UPDATE);
+    } catch (error) {
+      console.error('版本检查失败:', error);
     }
   };
 
