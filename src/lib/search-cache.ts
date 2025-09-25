@@ -128,6 +128,25 @@ function performCacheCleanup(): { expired: number; total: number; sizeLimited: n
 }
 
 /**
+ * 清理特定查询的所有缓存
+ */
+export function clearSearchCacheForQuery(query: string): number {
+  const trimmedQuery = query.trim();
+  let clearedCount = 0;
+  
+  // 遍历所有缓存键，删除包含指定查询的缓存
+  Array.from(SEARCH_CACHE.keys()).forEach(key => {
+    if (key.includes(`::${trimmedQuery}::`)) {
+      SEARCH_CACHE.delete(key);
+      clearedCount++;
+    }
+  });
+  
+  console.log(`[CACHE] 清理查询 "${trimmedQuery}" 的缓存，共清理 ${clearedCount} 个条目`);
+  return clearedCount;
+}
+
+/**
  * 启动自动清理定时器
  */
 function startAutoCleanup(): void {

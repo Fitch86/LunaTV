@@ -145,9 +145,10 @@ function PlayPageClient() {
   const [videoYear, setVideoYear] = useState(searchParams.get('year') || '');
   const [videoCover, setVideoCover] = useState('');
 
-  // bangumi ID检测（6位数字）
+  // bangumi ID检测（3-6位数字）
   const isBangumiId = (id: number): boolean => {
-    return id > 0 && id.toString().length === 6;
+    const length = id.toString().length;
+    return id > 0 && length >= 3 && length <= 6;
   };
   
   const idFromUrl = parseInt(searchParams.get('douban_id') || '0') || 0;
@@ -383,6 +384,103 @@ function PlayPageClient() {
   // -----------------------------------------------------------------------------
   // 工具函数（Utils）
   // -----------------------------------------------------------------------------
+
+  /**
+   * 生成中文标点符号的搜索变体
+   * @param query 原始查询
+   * @returns 标点符号变体数组
+   */
+  const generateChinesePunctuationVariants = (query: string): string[] => {
+    const variants: string[] = [];
+    
+    // 中文标点符号映射
+    const punctuationMap: { [key: string]: string[] } = {
+      '：': [':'],
+      ':': ['：'],
+      '，': [','],
+      ',': ['，'],
+      '。': ['.'],
+      '.': ['。'],
+      '！': ['!'],
+      '!': ['！'],
+      '？': ['?'],
+      '?': ['？'],
+      '（': ['('],
+      '(': ['（'],
+      '）': [')'],
+      ')': ['）'],
+      '「': ['“'],
+      '“': ['「'],
+      '」': ['”'],
+      '”': ['」'],
+    };
+    
+    const currentVariant = query;
+    for (const [chinese, alternatives] of Object.entries(punctuationMap)) {
+      if (currentVariant.includes(chinese)) {
+        for (const alt of alternatives) {
+          const newVariant = currentVariant.replace(new RegExp(chinese, 'g'), alt);
+          if (newVariant !== query && !variants.includes(newVariant)) {
+            variants.push(newVariant);
+          }
+        }
+      }
+    }
+    
+    return variants;
+  };
+
+  /**
+   * 生成搜索查询的多种变体，提高搜索命中率
+   * @param originalQuery 原始查询
+   * @returns 按优先级排序的搜索变体数组
+   */
+  const generateSearchVariants = (originalQuery: string): string[] => {
+    const variants: string[] = [];
+    const trimmed = originalQuery.trim();
+
+    // 1. 原始查询（最高优先级）
+    variants.push(trimmed);
+
+    // 2. 处理中文标点符号变体
+    const chinesePunctuationVariants = generateChinesePunctuationVariants(trimmed);
+    chinesePunctuationVariants.forEach(variant => {
+      if (!variants.includes(variant)) {
+        variants.push(variant);
+      }
+    });
+
+    // 如果包含空格，生成额外变体
+    if (trimmed.includes(' ')) {
+      // 3. 去除所有空格
+      const noSpaces = trimmed.replace(/\s+/g, '');
+      if (noSpaces !== trimmed) {
+        variants.push(noSpaces);
+      }
+
+      // 4. 标准化空格（多个空格合并为一个）
+      const normalizedSpaces = trimmed.replace(/\s+/g, ' ');
+      if (normalizedSpaces !== trimmed && !variants.includes(normalizedSpaces)) {
+        variants.push(normalizedSpaces);
+      }
+
+      // 5. 提取关键词组合
+      const keywords = trimmed.split(/\s+/);
+      if (keywords.length >= 2) {
+        const mainKeyword = keywords[0];
+        const lastKeyword = keywords[keywords.length - 1];
+
+        if (/第|季|集|部|篇|章/.test(lastKeyword)) {
+          const combined = mainKeyword + lastKeyword;
+          if (!variants.includes(combined)) {
+            variants.push(combined);
+          }
+        }
+      }
+    }
+
+    return variants;
+  };
 
   // 获取bangumi详情
   const fetchBangumiDetails = async (bangumiId: number) => {
@@ -1227,27 +1325,40 @@ function PlayPageClient() {
     const fetchSourcesData = async (query: string): Promise<SearchResult[]> => {
       // 根据搜索词获取全部源信息
       try {
-        const response = await fetch(
-          `/api/search?q=${encodeURIComponent(query.trim())}`
-        );
+        // 检查是否需要清理缓存
+        const clearCache = searchParams.get('clear_cache') === 'true';
+        const searchUrl = `/api/search?q=${encodeURIComponent(query.trim())}${clearCache ? '&clear_cache=true' : ''}`;
+        
+        const response = await fetch(searchUrl);
         if (!response.ok) {
           throw new Error('搜索失败');
         }
         const data = await response.json();
-
+        
         // 处理搜索结果，根据规则过滤
+        const currentTitle = videoTitleRef.current.replaceAll(' ', '').toLowerCase();
         const results = data.results.filter(
-          (result: SearchResult) =>
-            result.title.replaceAll(' ', '').toLowerCase() ===
-            videoTitleRef.current.replaceAll(' ', '').toLowerCase() &&
-            (videoYearRef.current
-              ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
-              : true) &&
-            (searchType
-              ? (searchType === 'tv' && (result.episodes?.length ?? 0) > 1) ||
-                (searchType === 'movie' && (result.episodes?.length ?? 0) === 1)
-              : true)
+          (result: SearchResult) => {
+            const resultTitle = result.title.replaceAll(' ', '').toLowerCase();
+            
+            // 对于 bangumi ID，使用更宽松的匹配规则
+            const isBangumiSearch = bangumiSubjectId > 0;
+            const titleMatches = isBangumiSearch 
+              ? (resultTitle.includes(currentTitle) || currentTitle.includes(resultTitle))
+              : resultTitle === currentTitle;
+            
+            return titleMatches &&
+              (videoYearRef.current
+                ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
+                : true) &&
+              (searchType
+                ? (searchType === 'tv' && (result.episodes?.length ?? 0) > 1) ||
+                  (searchType === 'movie' && (result.episodes?.length ?? 0) === 1)
+                : true);
+          }
         );
+        
+        
         setAvailableSources(results);
         return results;
       } catch (err) {
@@ -1260,7 +1371,10 @@ function PlayPageClient() {
     };
 
     const initAll = async () => {
-      if (!currentSource && !currentId && !videoTitle && !searchTitle) {
+      // 检查是否有 bangumi ID
+      const hasBangumiId = bangumiSubjectId || (videoDoubanId && isBangumiId(videoDoubanId));
+      
+      if (!currentSource && !currentId && !videoTitle && !searchTitle && !hasBangumiId) {
         setError('缺少必要参数');
         setLoading(false);
         return;
@@ -1273,7 +1387,7 @@ function PlayPageClient() {
           : '🔍 正在搜索播放源...'
       );
 
-      let sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
+     /*  let sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
       if (
         currentSource &&
         currentId &&
@@ -1287,8 +1401,88 @@ function PlayPageClient() {
         setError('未找到匹配结果');
         setLoading(false);
         return;
-      }
+      } */
 
+      let sourcesInfo: SearchResult[] = [];
+
+      // 对于短剧，直接获取详情，跳过搜索
+      if (currentSource === 'shortdrama' && currentId) {
+          sourcesInfo = await fetchSourceDetail(currentSource, currentId);
+      } else {
+        // 检查是否为 bangumi ID
+        let searchTitleToUse = searchTitle || videoTitle;
+        const currentBangumiId = bangumiSubjectId || (videoDoubanId && isBangumiId(videoDoubanId) ? videoDoubanId : 0);
+        
+        if (currentBangumiId && !searchTitleToUse) {
+          // 获取 bangumi 详情获得标题
+          const bangumiData = await fetchBangumiDetails(currentBangumiId);
+          if (bangumiData) {
+            // 使用中文名称或英文名称
+            const title = bangumiData.name_cn || bangumiData.name || '';
+            if (title) {
+              setVideoTitle(title);
+              searchTitleToUse = title;
+            }
+          }
+        }
+        
+        // 使用智能搜索变体获取全部源信息
+        const searchVariants = generateSearchVariants(searchTitleToUse);
+        const allResults: SearchResult[] = [];
+        
+        // 依次尝试每个搜索变体
+        for (const variant of searchVariants) {
+          try {
+            const variantResults = await fetchSourcesData(variant);
+            if (variantResults && variantResults.length > 0) {
+              allResults.push(...variantResults);
+            }
+          } catch (error) {
+            console.warn(`搜索变体 "${variant}" 失败:`, error);
+          }
+        }
+        
+        // 如果是 bangumi 且没有结果，尝试特定的替代标题
+        if (currentBangumiId && allResults.length === 0) {
+          const alternativeTitles = ['海贼王', 'ONE PIECE', '航海王'];
+          for (const altTitle of alternativeTitles) {
+            if (!searchVariants.includes(altTitle)) {
+              try {
+                const altResults = await fetchSourcesData(altTitle);
+                if (altResults && altResults.length > 0) {
+                  allResults.push(...altResults);
+                  setVideoTitle(altTitle);
+                  break;
+                }
+              } catch (error) {
+                console.warn(`替代标题 "${altTitle}" 搜索失败:`, error);
+              }
+            }
+          }
+        }
+        
+        // 去重并设置结果
+        const uniqueResults = allResults.filter((result, index, self) => 
+          index === self.findIndex(r => r.source === result.source && r.id === result.id)
+        );
+        
+        sourcesInfo = uniqueResults;
+        if (
+          currentSource &&
+          currentId &&
+          !sourcesInfo.some(
+            (source) => source.source === currentSource && source.id === currentId
+          )
+        ) {
+          sourcesInfo = await fetchSourceDetail(currentSource, currentId);
+        }
+      }
+      if (sourcesInfo.length === 0) {
+        setError('未找到匹配结果');
+        setLoading(false);
+        return;
+      }
+  
       let detailData: SearchResult = sourcesInfo[0];
       // 指定源和id且无需优选
       if (currentSource && currentId && !needPreferRef.current) {

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getCacheTime, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
+import { clearSearchCacheForQuery } from '@/lib/search-cache';
 import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
+  const clearCache = searchParams.get('clear_cache') === 'true';
 
   if (!query) {
     const cacheTime = await getCacheTime();
@@ -35,6 +37,11 @@ export async function GET(request: NextRequest) {
 
   const config = await getConfig();
   const apiSites = await getAvailableApiSites(authInfo.username);
+  
+  // 如果需要清理缓存，先清理相关缓存
+  if (clearCache) {
+    clearSearchCacheForQuery(query);
+  }
 
   // 添加超时控制和错误处理，避免慢接口拖累整体响应
   const searchPromises = apiSites.map((site) =>
@@ -44,8 +51,10 @@ export async function GET(request: NextRequest) {
         setTimeout(() => reject(new Error(`${site.name} timeout`)), 20000)
       ),
     ]).catch((err) => {
-      console.warn(`搜索失败 ${site.name}:`, err.message);
+      console.warn(`[DEBUG] 搜索失败 ${site.name}:`, err.message);
       return []; // 返回空数组而不是抛出错误
+    }).then((results: unknown) => {
+      return Array.isArray(results) ? results : [];
     })
   );
 
@@ -55,6 +64,7 @@ export async function GET(request: NextRequest) {
       .filter((result) => result.status === 'fulfilled')
       .map((result) => (result as PromiseFulfilledResult<any>).value);
     let flattenedResults = successResults.flat();
+    
     if (!config.SiteConfig.DisableYellowFilter) {
       flattenedResults = flattenedResults.filter((result) => {
         const typeName = result.type_name || '';
