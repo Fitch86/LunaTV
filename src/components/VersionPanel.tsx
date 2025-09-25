@@ -109,8 +109,20 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
   // 独立的版本检查
   const checkVersionUpdate = async () => {
     try {
-      const updateStatus = await checkForUpdates();
-      setIsHasUpdate(updateStatus === UpdateStatus.HAS_UPDATE);
+      // 先获取远程版本号
+      const response = await fetch(
+        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newdanmu/VERSION.txt'
+      );
+      if (response.ok) {
+        const remoteVersion = (await response.text()).trim();
+        console.log('[VersionPanel] 获取到远程版本:', remoteVersion);
+        setLatestVersion(remoteVersion);
+        
+        // 然后检查更新状态
+        const updateStatus = await checkForUpdates();
+        console.log('[VersionPanel] 更新状态:', updateStatus);
+        setIsHasUpdate(updateStatus === UpdateStatus.HAS_UPDATE);
+      }
     } catch (error) {
       console.error('版本检查失败:', error);
     }
@@ -363,7 +375,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                         发现新版本
                       </h4>
                       <p className='text-xs sm:text-sm text-yellow-700 dark:text-yellow-300 break-all'>
-                        v{CURRENT_VERSION} → v{latestVersion}
+                        v{CURRENT_VERSION} → v{latestVersion || '获取中...'}
                       </p>
                     </div>
                   </div>
