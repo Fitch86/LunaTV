@@ -18,7 +18,8 @@ export const changelog: ChangelogEntry[] = [
     ],
     changed: [
     "改进了个人统计即将上映显示",
-    "改进了上映日程显示"
+    "改进了上映日程显示",
+    "改进了远程日志显示"
     ],
     fixed: [
       // 无修复内容
