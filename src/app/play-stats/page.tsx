@@ -1,22 +1,69 @@
 'use client';
 
+import { ChevronUp } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronUp } from 'lucide-react';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { PlayRecord, ReleaseCalendarItem } from '@/lib/types';
 import {
+  type WatchingUpdate,
+  checkWatchingUpdates,
   getCachedWatchingUpdates,
   getDetailedWatchingUpdates,
-  checkWatchingUpdates,
   markUpdatesAsViewed,
-  type WatchingUpdate,
 } from '@/lib/watching-updates';
 
 import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
+
+// 用户等级系统
+const USER_LEVELS = [
+  { level: 1, name: "新星观众", icon: "🌟", minLogins: 1, maxLogins: 9, description: "刚刚开启观影之旅", gradient: "from-slate-400 to-slate-600" },
+  { level: 2, name: "常客影迷", icon: "🎬", minLogins: 10, maxLogins: 49, description: "热爱电影的观众", gradient: "from-blue-400 to-blue-600" },
+  { level: 3, name: "资深观众", icon: "📺", minLogins: 50, maxLogins: 199, description: "对剧集有独特品味", gradient: "from-emerald-400 to-emerald-600" },
+  { level: 4, name: "影院达人", icon: "🎭", minLogins: 200, maxLogins: 499, description: "深度电影爱好者", gradient: "from-violet-400 to-violet-600" },
+  { level: 5, name: "观影专家", icon: "🏆", minLogins: 500, maxLogins: 999, description: "拥有丰富观影经验", gradient: "from-amber-400 to-amber-600" },
+  { level: 6, name: "传奇影神", icon: "👑", minLogins: 1000, maxLogins: 2999, description: "影视界的传奇人物", gradient: "from-red-400 via-red-500 to-red-600" },
+  { level: 7, name: "殿堂影帝", icon: "💎", minLogins: 3000, maxLogins: 9999, description: "影视殿堂的至尊", gradient: "from-pink-400 via-pink-500 to-pink-600" },
+  { level: 8, name: "永恒之光", icon: "✨", minLogins: 10000, maxLogins: Infinity, description: "永恒闪耀的观影之光", gradient: "from-indigo-400 via-purple-500 to-pink-500" }
+];
+
+function calculateUserLevel(loginCount: number) {
+  // 0次登录的特殊处理
+  if (loginCount === 0) {
+    return {
+      level: 0,
+      name: "待激活",
+      icon: "💤",
+      minLogins: 0,
+      maxLogins: 0,
+      description: "尚未开始观影之旅",
+      gradient: "from-gray-400 to-gray-500"
+    };
+  }
+
+  for (const level of USER_LEVELS) {
+    if (loginCount >= level.minLogins && loginCount <= level.maxLogins) {
+      return level;
+    }
+  }
+  return USER_LEVELS[USER_LEVELS.length - 1];
+}
+
+function formatLoginDisplay(loginCount: number) {
+  const userLevel = calculateUserLevel(loginCount);
+
+  return {
+    isSimple: false,
+    level: userLevel,
+    displayCount: loginCount === 0 ? '0' :
+                  loginCount > 10000 ? '10000+' :
+                  loginCount > 1000 ? `${Math.floor(loginCount / 1000)}k+` :
+                  loginCount.toString()
+  };
+}
 
 import { PlayStatsResult } from '@/app/api/admin/play-stats/route';
 
@@ -609,47 +656,49 @@ const PlayStatsPage: React.FC = () => {
     return (
       <PageLayout activePath="/play-stats">
         <div className='max-w-7xl mx-auto px-4 py-8'>
-          {/* 页面标题、Tab切换和刷新按钮 */}
-          <div className='flex justify-between items-start mb-8'>
-            <div className='flex-1'>
-              <h1 className='text-3xl font-bold text-gray-900 dark:text-white'>
-                播放统计
-              </h1>
-              <p className='text-gray-600 dark:text-gray-400 mt-2'>
-                {activeTab === 'admin' ? '查看全站播放数据和趋势分析' : '查看您的个人播放记录和统计'}
-              </p>
+          {/* 页面标题和描述 */}
+          <div className='mb-6'>
+            <h1 className='text-3xl font-bold text-gray-900 dark:text-white'>
+              播放统计
+            </h1>
+            <p className='text-gray-600 dark:text-gray-400 mt-2'>
+              {activeTab === 'admin' ? '查看全站播放数据和趋势分析' : '查看您的个人播放记录和统计'}
+            </p>
+          </div>
 
-              {/* Tab 切换 */}
-              <div className='mt-6 border-b border-gray-200 dark:border-gray-700'>
-                <nav className='-mb-px flex space-x-8'>
-                  <button
-                    onClick={() => setActiveTab('admin')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'admin'
-                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                    }`}
-                  >
-                    全站统计
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('personal')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'personal'
-                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                    }`}
-                  >
-                    我的统计
-                  </button>
-                </nav>
-              </div>
+          {/* Tab切换和刷新按钮 */}
+          <div className='flex justify-between items-end mb-8'>
+            {/* Tab 切换 */}
+            <div className='border-b border-gray-200 dark:border-gray-700'>
+              <nav className='-mb-px flex space-x-8'>
+                <button
+                  onClick={() => setActiveTab('admin')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'admin'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  全站统计
+                </button>
+                <button
+                  onClick={() => setActiveTab('personal')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'personal'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  我的统计
+                </button>
+              </nav>
             </div>
 
+            {/* 刷新按钮 */}
             <button
               onClick={handleRefreshClick}
               disabled={loading}
-              className='px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm rounded-lg transition-colors flex items-center space-x-2 ml-4'
+              className='px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm rounded-lg transition-colors flex items-center space-x-2 mb-0.5'
             >
               <svg
                 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
@@ -911,11 +960,31 @@ const PlayStatsPage: React.FC = () => {
                                 注册天数: {userStat.registrationDays} 天
                               </p>
                               <p className='text-xs text-gray-500 dark:text-gray-400'>
-                                最后活跃:{' '}
+                                最后登入:{' '}
                                 {userStat.lastLoginTime !== userStat.createdAt
                                   ? formatDateTime(userStat.lastLoginTime)
                                   : '注册时'}
                               </p>
+                              <div className='text-xs text-gray-500 dark:text-gray-400'>
+                                {(() => {
+                                  const loginCount = userStat.loginCount || 0;
+                                  const loginDisplay = formatLoginDisplay(loginCount);
+
+                                  return (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-base flex-shrink-0">{loginDisplay.level.icon}</span>
+                                        <span className="font-medium text-gray-700 dark:text-gray-300 text-xs leading-tight">
+                                          {loginDisplay.level.name}
+                                        </span>
+                                      </div>
+                                      <div className="text-xs opacity-60">
+                                        {loginCount === 0 ? '尚未登录' : `${loginDisplay.displayCount}次登录`}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                               {userStat.mostWatchedSource && (
                                 <p className='text-xs text-gray-500 dark:text-gray-400'>
                                   常用来源: {userStat.mostWatchedSource}
