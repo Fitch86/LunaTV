@@ -608,13 +608,13 @@ export default function ReleaseCalendarPage() {
 
                           {/* 标签区域 */}
                           <div className="flex flex-wrap gap-2 pt-2">
-                            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-md text-xs">
-                              <MapPin className="w-3 h-3" />
-                              <span className="text-gray-600 dark:text-gray-400">{item.region}</span>
+                          <div className="inline-flex items-center gap-1 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-xs">
+                              <MapPin className="w-3 h-3 " />
+                              <span>{item.region}</span>
                             </div>
-                            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-md text-xs">
+                            <div className="inline-flex items-center gap-1 bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded-full text-xs">
                               <Tag className="w-3 h-3" />
-                              <span className="text-gray-600 dark:text-gray-400">{item.genre}</span>
+                              <span>{item.genre}</span>
                             </div>
                             {item.episodes && (
                               <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 rounded-md text-xs">
@@ -1056,11 +1056,11 @@ export default function ReleaseCalendarPage() {
 
                                     {/* 标签 */}
                                     <div className="flex flex-wrap gap-2 pt-2">
-                                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                                      <span className="inline-flex items-center gap-1 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full text-xs">
                                         <MapPin className="w-3 h-3" />
                                         {item.region}
                                       </span>
-                                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-xs">
+                                      <span className="inline-flex items-center gap-1 bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded-full text-xs">
                                         <Tag className="w-3 h-3" />
                                         {item.genre}
                                       </span>

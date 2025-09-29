@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2025.09.29.01",
+    date: "2025-09-29",
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+    "改进了个人统计即将上映显示",
+    "改进了上映日程显示"
+    ],
+    fixed: [
+      // 无修复内容
+    ]
+  },
+  {
     version: "2025.09.25.01",
     date: "2025-09-25",
     added: [
@@ -21,7 +35,8 @@ export const changelog: ChangelogEntry[] = [
     ],
     fixed: [
     "修复了 anime.images?. 空值导致主页崩溃",
-    "改进了 bangumi ID 搜索逻辑 - 改进了搜索匹配规则"
+    "改进了 bangumi ID 搜索逻辑",
+    "改进了搜索匹配规则"
     ]
   },
   {

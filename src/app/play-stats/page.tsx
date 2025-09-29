@@ -1225,19 +1225,19 @@ const PlayStatsPage: React.FC = () => {
               {/* 即将上映卡片 */}
               {(upcomingInitialized || upcomingLoading) && (
                 <div className="mb-8">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-6 text-white shadow-lg">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-white shadow-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <h3 className="text-lg font-bold flex items-center gap-2">
                           📅 即将上映
                         </h3>
-                        <p className="text-purple-100 text-sm mt-1">
+                        <p className="font-normal text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                           {upcomingLoading ? '正在获取最新内容...' : `未来两周将有 ${upcomingReleases.length} 部新内容上线`}
                         </p>
                       </div>
                       <button
                         onClick={() => router.push('/release-calendar')}
-                        className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
                       >
                         <span>查看全部</span>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1263,19 +1263,19 @@ const PlayStatsPage: React.FC = () => {
                           {/* 电影部分 */}
                           {upcomingReleases.filter(item => item.type === 'movie').length > 0 && (
                             <div className="w-full">
-                              <div className="text-sm font-medium text-purple-100 mb-3 flex items-center gap-2 border-b border-white/20 pb-2">
-                                🎬 电影
+                              <div className="font-normal text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors border-b border-blue-300 pb-3">
+                                🎬 电影 有{upcomingReleases.filter(item => item.type === 'movie').length}部即将上映
                               </div>
                               <div className="flex space-x-3 overflow-x-auto pb-1 w-full">
                                 {upcomingReleases.filter(item => item.type === 'movie').slice(0, 7).map(item => (
-                                  <div key={item.id} className="min-w-[140px] bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 flex-shrink-0">
+                                  <div key={item.id} className="min-w-[140px] bg-white/20 backdrop-blur-sm rounded-lg p-3 border border-gray-500 flex-shrink-0">
                                     <div className="text-sm font-medium mb-1 line-clamp-2" title={item.title}>
                                       {item.title}
                                     </div>
-                                    <div className="text-xs text-purple-200 mb-1">
+                                    <div className="text-xs text-gray-900 dark:text-white mb-1">
                                       {new Date(item.releaseDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
                                     </div>
-                                    <div className="text-xs text-purple-200 truncate">
+                                    <div className="text-xs text-gray-900 dark:text-white truncate">
                                       {item.region}
                                     </div>
                                   </div>
@@ -1287,19 +1287,19 @@ const PlayStatsPage: React.FC = () => {
                           {/* 电视剧部分 */}
                           {upcomingReleases.filter(item => item.type === 'tv').length > 0 && (
                             <div className="w-full">
-                              <div className="text-sm font-medium text-purple-100 mb-3 flex items-center gap-2 border-b border-white/20 pb-2">
-                                📺 电视剧
+                              <div className="font-normal text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors border-b border-blue-300 pb-3">
+                                📺 电视剧 有{upcomingReleases.filter(item => item.type === 'tv').length}部即将上映
                               </div>
                               <div className="flex space-x-3 overflow-x-auto pb-1 w-full">
                                 {upcomingReleases.filter(item => item.type === 'tv').slice(0, 7).map(item => (
-                                  <div key={item.id} className="min-w-[140px] bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 flex-shrink-0">
+                                  <div key={item.id} className="min-w-[140px] bg-white/20 backdrop-blur-sm rounded-lg p-3 border border-gray-500 flex-shrink-0">
                                     <div className="text-sm font-medium mb-1 line-clamp-2" title={item.title}>
                                       {item.title}
                                     </div>
-                                    <div className="text-xs text-purple-200 mb-1">
+                                    <div className="text-xs text-gray-900 dark:text-white mb-1">
                                       {new Date(item.releaseDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
                                     </div>
-                                    <div className="text-xs text-purple-200 truncate">
+                                    <div className="text-xs text-gray-900 dark:text-white truncate">
                                       {item.region}
                                     </div>
                                   </div>
@@ -1794,19 +1794,19 @@ const PlayStatsPage: React.FC = () => {
           {/* 即将上映卡片 */}
           {(upcomingInitialized || upcomingLoading) && (
             <div className="mb-8">
-              <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-6 text-white shadow-lg">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-white shadow-lg">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-lg font-bold flex items-center gap-2">
                       📅 即将上映
                     </h3>
-                    <p className="text-purple-100 text-sm mt-1">
+                    <p className="font-normal text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {upcomingLoading ? '正在获取最新内容...' : `未来两周将有 ${upcomingReleases.length} 部新内容上线`}
                     </p>
                   </div>
                   <button
                     onClick={() => router.push('/release-calendar')}
-                    className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
                   >
                     <span>查看全部</span>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1831,19 +1831,19 @@ const PlayStatsPage: React.FC = () => {
                       {/* 电影部分 */}
                       {upcomingReleases.filter(item => item.type === 'movie').length > 0 && (
                         <div className="w-full">
-                          <div className="text-sm font-medium text-purple-100 mb-3 flex items-center gap-2 border-b border-white/20 pb-2">
-                            🎬 电影
+                          <div className="font-normal text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors border-b border-blue-300 pb-3">
+                            🎬 电影 有{upcomingReleases.filter(item => item.type === 'movie').length}部即将上映
                           </div>
                           <div className="flex space-x-3 overflow-x-auto pb-1 w-full">
                             {upcomingReleases.filter(item => item.type === 'movie').slice(0, 7).map(item => (
-                              <div key={item.id} className="min-w-[140px] bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 flex-shrink-0">
+                              <div key={item.id} className="min-w-[140px] bg-white/20 backdrop-blur-sm rounded-lg p-3 border border-gray-500 flex-shrink-0">
                                 <div className="text-sm font-medium mb-1 line-clamp-2" title={item.title}>
                                   {item.title}
                                 </div>
-                                <div className="text-xs text-purple-200 mb-1">
+                                <div className="text-xs text-gray-900 dark:text-white mb-1">
                                   {new Date(item.releaseDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
                                 </div>
-                                <div className="text-xs text-purple-200 truncate">
+                                <div className="text-xs text-gray-900 dark:text-white mb-1">
                                   {item.region}
                                 </div>
                               </div>
@@ -1855,19 +1855,19 @@ const PlayStatsPage: React.FC = () => {
                       {/* 电视剧部分 */}
                       {upcomingReleases.filter(item => item.type === 'tv').length > 0 && (
                         <div className="w-full">
-                          <div className="text-sm font-medium text-purple-100 mb-3 flex items-center gap-2 border-b border-white/20 pb-2">
-                            📺 电视剧
+                          <div className="font-normal text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors border-b border-blue-300 pb-3">
+                            📺 电视剧 有{upcomingReleases.filter(item => item.type === 'tv').length}部即将上映
                           </div>
                           <div className="flex space-x-3 overflow-x-auto pb-1 w-full">
                             {upcomingReleases.filter(item => item.type === 'tv').slice(0, 7).map(item => (
-                              <div key={item.id} className="min-w-[140px] bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 flex-shrink-0">
+                              <div key={item.id} className="min-w-[140px] bg-white/20 backdrop-blur-sm rounded-lg p-3 border border-gray-500 flex-shrink-0">
                                 <div className="text-sm font-medium mb-1 line-clamp-2" title={item.title}>
                                   {item.title}
                                 </div>
-                                <div className="text-xs text-purple-200 mb-1">
+                                <div className="text-xs text-gray-900 dark:text-white mb-1">
                                   {new Date(item.releaseDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
                                 </div>
-                                <div className="text-xs text-purple-200 truncate">
+                                <div className="text-xs text-gray-900 dark:text-white mb-1">
                                   {item.region}
                                 </div>
                               </div>
