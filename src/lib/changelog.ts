@@ -11,6 +11,19 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2025.09.30.01",
+    date: "2025-09-30",
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+    "修正 lastLoginTime 的保存和获取逻辑"
+    ]
+  },
+  {
     version: "2025.09.29.01",
     date: "2025-09-29",
     added: [

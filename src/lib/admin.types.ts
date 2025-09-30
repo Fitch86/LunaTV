@@ -18,6 +18,8 @@ export interface AdminConfig {
     FluidSearch: boolean;
   };
   UserConfig: {
+    AutoCleanupInactiveUsers?: boolean; // 是否自动清理非活跃用户，默认 false
+    InactiveUserDays?: number; // 非活跃用户保留天数，默认 7
     Users: {
       username: string;
       role: 'user' | 'admin' | 'owner';

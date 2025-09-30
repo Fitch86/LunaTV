@@ -961,7 +961,7 @@ const PlayStatsPage: React.FC = () => {
                               </p>
                               <p className='text-xs text-gray-500 dark:text-gray-400'>
                                 最后登入:{' '}
-                                {userStat.lastLoginTime !== userStat.createdAt
+                                {userStat.lastLoginTime && userStat.lastLoginTime > 0
                                   ? formatDateTime(userStat.lastLoginTime)
                                   : '注册时'}
                               </p>
