@@ -1,5 +1,9 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
+import { NextRequest } from 'next/server';
+
+import { getAuthInfoFromCookie } from '@/lib/auth';
+
 import { AdminConfig } from './admin.types';
 import { KvrocksStorage } from './kvrocks.db';
 import { RedisStorage } from './redis.db';
@@ -256,7 +260,11 @@ export class DbManager {
     return null;
   }
 
-  async setCache(key: string, data: any, expireSeconds?: number): Promise<void> {
+  async setCache(
+    key: string,
+    data: any,
+    expireSeconds?: number
+  ): Promise<void> {
     if (typeof this.storage.setCache === 'function') {
       await this.storage.setCache(key, data, expireSeconds);
     }
@@ -305,9 +313,24 @@ export class DbManager {
     };
   }
 
-  async getUserPlayStat(userName: string): Promise<UserPlayStat> {
+  async getUserPlayStat(
+    userName: string,
+    request?: NextRequest
+  ): Promise<UserPlayStat> {
+    let lastLoginTime = 0;
+
+    // Only try to get login time from cookie if request object is provided
+    if (request) {
+      try {
+        const cookieData = getAuthInfoFromCookie(request);
+        lastLoginTime = cookieData?.loginTime || 0;
+      } catch (error) {
+        console.error('Failed to get login time from cookie:', error);
+      }
+    }
+
     if (typeof (this.storage as any).getUserPlayStat === 'function') {
-      return (this.storage as any).getUserPlayStat(userName);
+      return (this.storage as any).getUserPlayStat(userName, lastLoginTime);
     }
 
     // 如果存储不支持统计功能，返回默认值
@@ -318,7 +341,11 @@ export class DbManager {
       lastPlayTime: 0,
       recentRecords: [],
       avgWatchTime: 0,
-      mostWatchedSource: ''
+      mostWatchedSource: '',
+      loginCount: 0,
+      lastLoginTime: lastLoginTime || 0,
+      firstLoginTime: 0,
+      lastLoginDate: 0,
     };
   }
 
@@ -338,7 +365,12 @@ export class DbManager {
     _watchTime: number
   ): Promise<void> {
     if (typeof (this.storage as any).updatePlayStatistics === 'function') {
-      await (this.storage as any).updatePlayStatistics(_userName, _source, _id, _watchTime);
+      await (this.storage as any).updatePlayStatistics(
+        _userName,
+        _source,
+        _id,
+        _watchTime
+      );
     }
   }
 
@@ -348,7 +380,11 @@ export class DbManager {
     isFirstLogin?: boolean
   ): Promise<void> {
     if (typeof (this.storage as any).updateUserLoginStats === 'function') {
-      await (this.storage as any).updateUserLoginStats(userName, loginTime, isFirstLogin);
+      await (this.storage as any).updateUserLoginStats(
+        userName,
+        loginTime,
+        isFirstLogin
+      );
     }
   }
 

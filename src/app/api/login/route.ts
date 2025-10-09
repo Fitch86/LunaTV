@@ -139,6 +139,10 @@ export async function POST(req: NextRequest) {
       username === process.env.USERNAME &&
       password === process.env.PASSWORD
     ) {
+      // 更新登录统计
+      const now = Date.now();
+      const isFirstLogin = false; // 对于管理员账户，不更新首次登录时间
+
       // 验证成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
       const cookieValue = await generateAuthCookie(
@@ -147,6 +151,15 @@ export async function POST(req: NextRequest) {
         'owner',
         false
       ); // 数据库模式不包含 password
+
+      // 更新登录统计到数据库
+      try {
+        await db.updateUserLoginStats(username, now, isFirstLogin);
+        console.log(`[LOGIN] 管理员 ${username} 登录统计已更新`);
+      } catch (error) {
+        console.error('[LOGIN] 更新管理员登录统计失败:', error);
+        // 不阻止登录流程，仅记录错误
+      }
       const expires = new Date();
       expires.setDate(expires.getDate() + 7); // 7天过期
 
@@ -179,6 +192,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // 更新登录统计
+      const now = Date.now();
+      const userStat = await db.getUserPlayStat(username);
+      const isFirstLogin = userStat.loginCount === 0;
+
       // 验证成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
       const cookieValue = await generateAuthCookie(
@@ -187,6 +205,15 @@ export async function POST(req: NextRequest) {
         user?.role || 'user',
         false
       ); // 数据库模式不包含 password
+
+      // 更新登录统计到数据库
+      try {
+        await db.updateUserLoginStats(username, now, isFirstLogin);
+        console.log(`[LOGIN] 用户 ${username} 登录统计已更新`);
+      } catch (error) {
+        console.error(`[LOGIN] 更新用户 ${username} 登录统计失败:`, error);
+        // 不阻止登录流程，仅记录错误
+      }
       const expires = new Date();
       expires.setDate(expires.getDate() + 7); // 7天过期
 

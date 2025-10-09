@@ -69,7 +69,11 @@ export async function GET(request: NextRequest) {
 
     // 用户注册统计
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    ).getTime();
     let todayNewUsers = 0;
     let totalRegisteredUsers = 0;
     const registrationData: Record<string, number> = {};
@@ -88,9 +92,20 @@ export async function GET(request: NextRequest) {
         // 使用自然日计算，与个人统计保持一致
         const firstDate = new Date(userCreatedAt);
         const currentDate = new Date();
-        const firstDay = new Date(firstDate.getFullYear(), firstDate.getMonth(), firstDate.getDate());
-        const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-        const registrationDays = Math.floor((currentDay.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const firstDay = new Date(
+          firstDate.getFullYear(),
+          firstDate.getMonth(),
+          firstDate.getDate()
+        );
+        const currentDay = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          currentDate.getDate()
+        );
+        const registrationDays =
+          Math.floor(
+            (currentDay.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)
+          ) + 1;
 
         // 统计今日新增用户
         if (userCreatedAt >= todayStart) {
@@ -110,9 +125,32 @@ export async function GET(request: NextRequest) {
         try {
           const userPlayStat = await storage.getUserPlayStat(user.username);
           // 优先使用用户统计中的登入时间，这是真实的登录时间
-          lastLoginTime = userPlayStat.lastLoginTime || userPlayStat.lastLoginDate || userPlayStat.firstLoginTime || 0;
+          lastLoginTime =
+            userPlayStat.lastLoginTime ||
+            userPlayStat.lastLoginDate ||
+            userPlayStat.firstLoginTime ||
+            0;
           loginCount = userPlayStat.loginCount || 0;
+
+          /*console.log(`[DEBUG] 用户 ${user.username} 播放统计中的登录信息:`, {
+            lastLoginTime,
+            loginCount,
+            userPlayStatLastLoginTime: userPlayStat.lastLoginTime,
+            userPlayStatLastLoginDate: userPlayStat.lastLoginDate,
+            userPlayStatFirstLoginTime: userPlayStat.firstLoginTime,
+            userPlayStatLoginCount: userPlayStat.loginCount
+          });*/
+
+          // 如果所有登录时间都为0或null，则使用注册时间兜底
+          if (lastLoginTime === 0) {
+            lastLoginTime = userCreatedAt;
+            console.log(
+              `[DEBUG] 用户 ${user.username} 使用注册时间作为兜底:`,
+              new Date(lastLoginTime)
+            );
+          }
         } catch (err) {
+          console.error(`[DEBUG] 获取用户 ${user.username} 登录统计失败:`, err);
           // 获取失败时默认为0
           lastLoginTime = 0;
           loginCount = 0;
@@ -198,7 +236,7 @@ export async function GET(request: NextRequest) {
           avgWatchTime: records.length > 0 ? userWatchTime / records.length : 0,
           mostWatchedSource,
           registrationDays,
-          lastLoginTime: lastLoginTime || userCreatedAt, // 如果没有播放记录，使用注册时间
+          lastLoginTime: lastLoginTime, // 使用上面获取的真实登录时间
           loginCount,
           createdAt: userCreatedAt,
         };
@@ -218,9 +256,46 @@ export async function GET(request: NextRequest) {
         // 使用自然日计算，与个人统计保持一致
         const firstDate = new Date(userCreatedAt);
         const currentDate = new Date();
-        const firstDay = new Date(firstDate.getFullYear(), firstDate.getMonth(), firstDate.getDate());
-        const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-        const registrationDays = Math.floor((currentDay.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const firstDay = new Date(
+          firstDate.getFullYear(),
+          firstDate.getMonth(),
+          firstDate.getDate()
+        );
+        const currentDay = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          currentDate.getDate()
+        );
+        const registrationDays =
+          Math.floor(
+            (currentDay.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)
+          ) + 1;
+
+        // 获取用户的登录统计（即使播放记录获取失败也要获取）
+        let lastLoginTime = userCreatedAt; // 默认使用注册时间
+        let loginCount = 0;
+        try {
+          const userPlayStat = await storage.getUserPlayStat(user.username);
+          lastLoginTime =
+            userPlayStat.lastLoginTime ||
+            userPlayStat.lastLoginDate ||
+            userPlayStat.firstLoginTime ||
+            userCreatedAt;
+          loginCount = userPlayStat.loginCount || 0;
+
+          /*console.log(`[DEBUG] 用户 ${user.username} (无播放记录) 登录信息:`, {
+            lastLoginTime,
+            loginCount,
+            userPlayStatLastLoginTime: userPlayStat.lastLoginTime,
+            userPlayStatLastLoginDate: userPlayStat.lastLoginDate,
+            userPlayStatFirstLoginTime: userPlayStat.firstLoginTime,
+            userPlayStatLoginCount: userPlayStat.loginCount,
+            userCreatedAt
+          });*/
+        } catch (err) {
+          /*console.error(`[DEBUG] 获取用户 ${user.username} (无播放记录) 登录统计失败:`, err);*/
+          // 获取失败时使用默认值
+        }
 
         userStats.push({
           username: user.username,
@@ -231,8 +306,8 @@ export async function GET(request: NextRequest) {
           avgWatchTime: 0,
           mostWatchedSource: '',
           registrationDays,
-          lastLoginTime: userCreatedAt, // 没有播放记录时使用注册时间
-          loginCount: 0,
+          lastLoginTime: lastLoginTime,
+          loginCount,
           createdAt: userCreatedAt,
         });
       }
@@ -248,7 +323,11 @@ export async function GET(request: NextRequest) {
       .map(([source, count]) => ({ source, count }));
 
     // 整理近7天数据
-    const dailyStats: Array<{ date: string; watchTime: number; plays: number }> = [];
+    const dailyStats: Array<{
+      date: string;
+      watchTime: number;
+      plays: number;
+    }> = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const dateKey = date.toISOString().split('T')[0];
@@ -278,16 +357,19 @@ export async function GET(request: NextRequest) {
     const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
 
     const activeUsers = {
-      daily: userStats.filter(user => user.lastLoginTime >= oneDayAgo).length,
-      weekly: userStats.filter(user => user.lastLoginTime >= sevenDaysAgoTime).length,
-      monthly: userStats.filter(user => user.lastLoginTime >= thirtyDaysAgo).length,
+      daily: userStats.filter((user) => user.lastLoginTime >= oneDayAgo).length,
+      weekly: userStats.filter((user) => user.lastLoginTime >= sevenDaysAgoTime)
+        .length,
+      monthly: userStats.filter((user) => user.lastLoginTime >= thirtyDaysAgo)
+        .length,
     };
 
     const result = {
       totalUsers: allUsers.length,
       totalWatchTime,
       totalPlays,
-      avgWatchTimePerUser: allUsers.length > 0 ? totalWatchTime / allUsers.length : 0,
+      avgWatchTimePerUser:
+        allUsers.length > 0 ? totalWatchTime / allUsers.length : 0,
       avgPlaysPerUser: allUsers.length > 0 ? totalPlays / allUsers.length : 0,
       userStats,
       topSources,
