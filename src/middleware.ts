@@ -94,8 +94,21 @@ export async function middleware(request: NextRequest) {
       process.env.PASSWORD || ''
     );
 
-    // 签名验证通过即可
+    // 签名验证通过
     if (isValidSignature) {
+      // 检查是否需要更新登录统计（cookie 登录时）
+      // 如果 cookie 中有 loginTime，说明是新登录，需要在客户端更新统计
+      if (authInfo.loginTime) {
+        const response = NextResponse.next();
+        // 设置标记，让客户端组件知道需要更新登录统计
+        response.cookies.set('needsLoginStatsUpdate', 'true', {
+          path: '/',
+          maxAge: 60, // 60秒后过期
+          sameSite: 'lax',
+          httpOnly: false, // 客户端需要读取
+        });
+        return response;
+      }
       return NextResponse.next();
     }
   }

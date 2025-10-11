@@ -8,6 +8,7 @@ import './globals.css';
 import { getConfig } from '@/lib/config';
 
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
+import LoginStatsUpdater from '../components/LoginStatsUpdater';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 
@@ -117,6 +118,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <SiteProvider siteName={siteName} announcement={announcement}>
+            <LoginStatsUpdater />
             {children}
             <GlobalErrorIndicator />
           </SiteProvider>
