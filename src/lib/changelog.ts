@@ -11,6 +11,19 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2025.10.28.01",
+    date: "2025-10-28",
+    added: [
+    "增加源浏览器功能"
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+      // 无修复内容
+    ]
+  },
+  {
     version: "2025.10.11.01",
     date: "2025-10-11",
     added: [
