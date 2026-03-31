@@ -13,7 +13,7 @@ export enum UpdateStatus {
 
 // 远程版本检查URL配置
 const VERSION_CHECK_URLS = [
-  'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newdanmu/VERSION.txt',
+  'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newshort/VERSION.txt',
 ];
 
 /**

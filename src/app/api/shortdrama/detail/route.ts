@@ -3,88 +3,115 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
-import { parseShortDramaEpisode } from '@/lib/shortdrama.client';
+import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
 
-// 标记为动态路由
+// 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+// 默认短剧源
+const DEFAULT_SHORT_DRAMA_API = 'https://wwzy.tv/api.php/provide/vod';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
     const id = searchParams.get('id');
-    const episode = searchParams.get('episode');
 
     if (!id) {
-      return NextResponse.json(
-        { error: '缺少必要参数: id' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '缺少必要参数：id' }, { status: 400 });
     }
 
     const videoId = parseInt(id);
-    const episodeNum = episode ? parseInt(episode) : 1;
 
-    if (isNaN(videoId) || isNaN(episodeNum)) {
-      return NextResponse.json(
-        { error: '参数格式错误' },
-        { status: 400 }
-      );
+    if (isNaN(videoId)) {
+      return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
 
-    // 先尝试指定集数
-    let result = await parseShortDramaEpisode(videoId, episodeNum, true);
+    // Step 1: 获取短剧详情
+    const apiUrl = `${DEFAULT_SHORT_DRAMA_API}?ac=detail&ids=${videoId}`;
 
-    // 如果失败，尝试其他集数
-    if (result.code !== 0 || !result.data || !result.data.totalEpisodes) {
-      result = await parseShortDramaEpisode(videoId, episodeNum === 1 ? 2 : 1, true);
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': DEFAULT_USER_AGENT,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    // 如果还是失败，尝试第0集
-    if (result.code !== 0 || !result.data || !result.data.totalEpisodes) {
-      result = await parseShortDramaEpisode(videoId, 0, true);
+    const data = await response.json();
+    const items = data.list || [];
+
+    if (items.length === 0) {
+      return NextResponse.json({ error: '未找到该短剧' }, { status: 404 });
     }
 
-    if (result.code !== 0 || !result.data) {
-      return NextResponse.json(
-        { error: result.msg || '解析失败' },
-        { status: 400 }
-      );
+    const item = items[0];
+
+    // Step 2: 解析播放地址
+    // vod_play_url 格式："第 1 集$http://url1#第 2 集$http://url2"
+    const playUrl = item.vod_play_url || '';
+    const episodes: string[] = [];
+    const episodeTitles: string[] = [];
+
+    if (playUrl) {
+      // 按 # 分割集数
+      const parts = playUrl.split('#');
+      parts.forEach((part: string, index: number) => {
+        const match = part.match(/^(.+?)\$(.+)$/);
+        if (match) {
+          episodeTitles.push(match[1]);
+          episodes.push(match[2]);
+        } else {
+          // 如果没有标题，使用默认格式
+          episodeTitles.push(`第${index + 1}集`);
+          episodes.push(part);
+        }
+      });
     }
 
-    const totalEpisodes = Math.max(result.data.totalEpisodes || 1, 1);
-
-    // 转换为兼容格式
-    const response = {
-      id: result.data!.videoId.toString(),
-      title: result.data!.videoName,
-      poster: result.data!.cover,
-      episodes: Array.from({ length: totalEpisodes }, (_, i) =>
-        `shortdrama:${result.data!.videoId}:${i}` // API实际使用0-based索引
-      ),
-      episodes_titles: Array.from({ length: totalEpisodes }, (_, i) =>
-        `第${i + 1}集`
-      ),
-      source: 'shortdrama',
-      source_name: '短剧',
-      year: new Date().getFullYear().toString(),
-      desc: result.data!.description,
-      type_name: '短剧',
-    };
+    if (episodes.length === 0) {
+      return NextResponse.json({ error: '没有找到播放地址' }, { status: 404 });
+    }
 
     // 设置与豆瓣一致的缓存策略
     const cacheTime = await getCacheTime();
-    const finalResponse = NextResponse.json(response);
-    finalResponse.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
-    finalResponse.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-    finalResponse.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-    finalResponse.headers.set('Netlify-Vary', 'query');
+
+    // 转换为兼容格式
+    const response_data = {
+      id: item.vod_id.toString(),
+      title: item.vod_name,
+      poster: item.vod_pic || '',
+      episodes: episodes,
+      episodes_titles: episodeTitles,
+      source: 'shortdrama',
+      source_name: '短剧',
+      year: new Date().getFullYear().toString(),
+      desc: item.vod_content || item.vod_blurb || '',
+      type_name: '短剧',
+    };
+
+    const finalResponse = NextResponse.json(response_data);
+    finalResponse.headers.set(
+      'Cache-Control',
+      `public, max-age=${cacheTime}, s-maxage=${cacheTime}`
+    );
+    finalResponse.headers.set(
+      'CDN-Cache-Control',
+      `public, s-maxage=${cacheTime}`
+    );
+    finalResponse.headers.set(
+      'Vercel-CDN-Cache-Control',
+      `public, s-maxage=${cacheTime}`
+    );
 
     return finalResponse;
   } catch (error) {
     console.error('短剧详情获取失败:', error);
-    return NextResponse.json(
-      { error: '服务器内部错误' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

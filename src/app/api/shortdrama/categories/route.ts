@@ -1,19 +1,25 @@
 import { NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
+import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-// 服务端专用函数，直接调用外部API
-async function getShortDramaCategoriesInternal() {
-  const response = await fetch('https://api.r2afosne.dpdns.org/vod/categories', {
+// 默认短剧源
+const DEFAULT_SHORT_DRAMA_API = 'https://wwzy.tv/api.php/provide/vod';
+
+// 从单个源获取短剧分类
+async function getCategoriesFromSource(
+  api: string
+): Promise<{ type_id: number; type_name: string }[]> {
+  const response = await fetch(`${api}?ac=list`, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'application/json',
+      'User-Agent': DEFAULT_USER_AGENT,
+      Accept: 'application/json',
     },
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -21,11 +27,31 @@ async function getShortDramaCategoriesInternal() {
   }
 
   const data = await response.json();
-  const categories = data.categories || [];
-  return categories.map((item: any) => ({
-    type_id: item.type_id,
-    type_name: item.type_name,
+  const categories = data.class || [];
+
+  // 筛选包含"短剧"的分类
+  const shortDramaCategories = categories.filter(
+    (cat: any) => cat.type_name && cat.type_name.includes('短剧')
+  );
+
+  if (shortDramaCategories.length > 0) {
+    return shortDramaCategories.map((cat: any) => ({
+      type_id: cat.type_id,
+      type_name: cat.type_name,
+    }));
+  }
+
+  // 如果没有找到包含"短剧"的分类，返回所有分类供用户查看
+  return categories.map((cat: any) => ({
+    type_id: cat.type_id,
+    type_name: cat.type_name,
   }));
+}
+
+// 服务端专用函数，直接调用外部 API
+async function getShortDramaCategoriesInternal() {
+  console.log(`📋 [CATEGORIES] 使用默认短剧源：${DEFAULT_SHORT_DRAMA_API}`);
+  return await getCategoriesFromSource(DEFAULT_SHORT_DRAMA_API);
 }
 
 export async function GET() {
@@ -35,17 +61,28 @@ export async function GET() {
     // 设置与网页端一致的缓存策略（categories: 4小时）
     const response = NextResponse.json(categories);
 
-    console.log('🕐 [CATEGORIES] 设置4小时HTTP缓存 - 与网页端categories缓存一致');
+    console.log(
+      '🕐 [CATEGORIES] 设置4小时HTTP缓存 - 与网页端categories缓存一致'
+    );
 
     // 4小时 = 14400秒（与网页端SHORTDRAMA_CACHE_EXPIRE.categories一致）
     const cacheTime = 14400;
-    response.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
+    response.headers.set(
+      'Cache-Control',
+      `public, max-age=${cacheTime}, s-maxage=${cacheTime}`
+    );
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
+    response.headers.set(
+      'Vercel-CDN-Cache-Control',
+      `public, s-maxage=${cacheTime}`
+    );
 
     // 调试信息
     response.headers.set('X-Cache-Duration', '4hour');
-    response.headers.set('X-Cache-Expires-At', new Date(Date.now() + cacheTime * 1000).toISOString());
+    response.headers.set(
+      'X-Cache-Expires-At',
+      new Date(Date.now() + cacheTime * 1000).toISOString()
+    );
     response.headers.set('X-Debug-Timestamp', new Date().toISOString());
 
     // Vary头确保不同设备有不同缓存
@@ -54,9 +91,6 @@ export async function GET() {
     return response;
   } catch (error) {
     console.error('获取短剧分类失败:', error);
-    return NextResponse.json(
-      { error: '服务器内部错误' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

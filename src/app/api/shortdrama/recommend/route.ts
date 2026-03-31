@@ -1,46 +1,88 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
+import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-// 服务端专用函数，直接调用外部API
-async function getRecommendedShortDramasInternal(
-  category?: number,
-  size = 10
-) {
-  const params = new URLSearchParams();
-  if (category) params.append('category', category.toString());
-  params.append('size', size.toString());
+// 默认短剧源
+const DEFAULT_SHORT_DRAMA_API = 'https://wwzy.tv/api.php/provide/vod';
 
-  const response = await fetch(
-    `https://api.r2afosne.dpdns.org/vod/recommend?${params.toString()}`,
-    {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
-    }
+// 从单个短剧源获取推荐数据
+async function fetchFromShortDramaSource(api: string, size: number) {
+  // Step 1: 获取分类列表，找到"短剧"分类的 ID
+  const listUrl = `${api}?ac=list`;
+
+  const listResponse = await fetch(listUrl, {
+    headers: {
+      'User-Agent': DEFAULT_USER_AGENT,
+      Accept: 'application/json',
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!listResponse.ok) {
+    throw new Error(`HTTP error! status: ${listResponse.status}`);
+  }
+
+  const listData = await listResponse.json();
+  const categories = listData.class || [];
+
+  // 查找"短剧"分类（只要包含"短剧"两个字即可）
+  const shortDramaCategory = categories.find(
+    (cat: any) => cat.type_name && cat.type_name.includes('短剧')
   );
+
+  if (!shortDramaCategory) {
+    console.log(`该源没有短剧分类`);
+    return [];
+  }
+
+  const categoryId = shortDramaCategory.type_id;
+  console.log(`找到短剧分类 ID: ${categoryId}`);
+
+  // Step 2: 获取该分类的短剧列表
+  const apiUrl = `${api}?ac=detail&t=${categoryId}&pg=1`;
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      'User-Agent': DEFAULT_USER_AGENT,
+      Accept: 'application/json',
+    },
+    signal: AbortSignal.timeout(10000),
+  });
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
   const data = await response.json();
-  const items = data.items || [];
-  return items.map((item: any) => ({
-    id: item.vod_id || item.id,
-    name: item.vod_name || item.name,
-    cover: item.vod_pic || item.cover,
-    update_time: item.vod_time || item.update_time || new Date().toISOString(),
-    score: item.vod_score || item.score || 0,
+  const items = data.list || [];
+
+  return items.slice(0, size).map((item: any) => ({
+    id: item.vod_id,
+    name: item.vod_name,
+    cover: item.vod_pic || '',
+    update_time: item.vod_time || new Date().toISOString(),
+    score: parseFloat(item.vod_score) || 0,
     episode_count: parseInt(item.vod_remarks?.replace(/[^\d]/g, '') || '1'),
-    description: item.vod_content || item.description || '',
+    description: item.vod_content || item.vod_blurb || '',
+    author: item.vod_actor || '',
+    backdrop: item.vod_pic_slide || item.vod_pic || '',
+    vote_average: parseFloat(item.vod_score) || 0,
   }));
+}
+
+// 服务端专用函数，直接调用外部 API
+async function getRecommendedShortDramasInternal(category?: number, size = 10) {
+  console.log(
+    `🎯 [RECOMMEND] 使用默认短剧源：${DEFAULT_SHORT_DRAMA_API}, 分类：${
+      category || '全部'
+    }`
+  );
+  return await fetchFromShortDramaSource(DEFAULT_SHORT_DRAMA_API, size);
 }
 
 export async function GET(request: NextRequest) {
@@ -53,13 +95,13 @@ export async function GET(request: NextRequest) {
     const pageSize = size ? parseInt(size) : 10;
 
     if ((category && isNaN(categoryNum!)) || isNaN(pageSize)) {
-      return NextResponse.json(
-        { error: '参数格式错误' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
 
-    const result = await getRecommendedShortDramasInternal(categoryNum, pageSize);
+    const result = await getRecommendedShortDramasInternal(
+      categoryNum,
+      pageSize
+    );
 
     // 测试1小时HTTP缓存策略
     const response = NextResponse.json(result);
@@ -68,13 +110,22 @@ export async function GET(request: NextRequest) {
 
     // 1小时 = 3600秒
     const cacheTime = 3600;
-    response.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
+    response.headers.set(
+      'Cache-Control',
+      `public, max-age=${cacheTime}, s-maxage=${cacheTime}`
+    );
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
+    response.headers.set(
+      'Vercel-CDN-Cache-Control',
+      `public, s-maxage=${cacheTime}`
+    );
 
     // 调试信息
     response.headers.set('X-Cache-Duration', '1hour');
-    response.headers.set('X-Cache-Expires-At', new Date(Date.now() + cacheTime * 1000).toISOString());
+    response.headers.set(
+      'X-Cache-Expires-At',
+      new Date(Date.now() + cacheTime * 1000).toISOString()
+    );
     response.headers.set('X-Debug-Timestamp', new Date().toISOString());
 
     // Vary头确保不同设备有不同缓存
@@ -83,9 +134,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('获取推荐短剧失败:', error);
-    return NextResponse.json(
-      { error: '服务器内部错误' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
