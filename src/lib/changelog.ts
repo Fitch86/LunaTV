@@ -11,8 +11,23 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2026.06.12.01",
+    date: "2026-06-12",
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+    "修正弹幕在网络卡死恢复、进度拖动、换集等情况下关闭的情况下会自动打开",
+    "修正 ipad 等触摸设备无法删除继续播放卡片",
+    "修正番剧获取不到数据"
+    ]
+  },
+  {
     version: "2026.03.31.01",
-    date: "2025-03-31",
+    date: "2026-03-31",
     added: [
       // 无新增内容
     ],
@@ -46,7 +61,7 @@ export const changelog: ChangelogEntry[] = [
       // 无变更内容
     ],
     fixed: [
-    "修正 lastLoginTime cookie登录的保存"
+    "修正 lastLoginTime cookie 登录的保存"
     ]
   },
   {
@@ -59,7 +74,7 @@ export const changelog: ChangelogEntry[] = [
       // 无变更内容
     ],
     fixed: [
-    "修正 lastLoginTime cookie登录的保存和获取逻辑"
+    "修正 lastLoginTime cookie 登录的保存和获取逻辑"
     ]
   },
   {

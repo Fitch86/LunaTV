@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
 import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
+import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,11 @@ export async function GET(request: NextRequest) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
+    if (!data) {
+      return NextResponse.json({ error: '短剧详情API返回非JSON数据' }, { status: 502 });
+    }
+
     const items = data.list || [];
 
     if (items.length === 0) {
@@ -53,13 +58,11 @@ export async function GET(request: NextRequest) {
     const item = items[0];
 
     // Step 2: 解析播放地址
-    // vod_play_url 格式："第 1 集$http://url1#第 2 集$http://url2"
     const playUrl = item.vod_play_url || '';
     const episodes: string[] = [];
     const episodeTitles: string[] = [];
 
     if (playUrl) {
-      // 按 # 分割集数
       const parts = playUrl.split('#');
       parts.forEach((part: string, index: number) => {
         const match = part.match(/^(.+?)\$(.+)$/);
@@ -67,7 +70,6 @@ export async function GET(request: NextRequest) {
           episodeTitles.push(match[1]);
           episodes.push(match[2]);
         } else {
-          // 如果没有标题，使用默认格式
           episodeTitles.push(`第${index + 1}集`);
           episodes.push(part);
         }
@@ -78,10 +80,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '没有找到播放地址' }, { status: 404 });
     }
 
-    // 设置与豆瓣一致的缓存策略
     const cacheTime = await getCacheTime();
 
-    // 转换为兼容格式
     const response_data = {
       id: item.vod_id.toString(),
       title: item.vod_name,
@@ -96,22 +96,13 @@ export async function GET(request: NextRequest) {
     };
 
     const finalResponse = NextResponse.json(response_data);
-    finalResponse.headers.set(
-      'Cache-Control',
-      `public, max-age=${cacheTime}, s-maxage=${cacheTime}`
-    );
-    finalResponse.headers.set(
-      'CDN-Cache-Control',
-      `public, s-maxage=${cacheTime}`
-    );
-    finalResponse.headers.set(
-      'Vercel-CDN-Cache-Control',
-      `public, s-maxage=${cacheTime}`
-    );
+    finalResponse.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
+    finalResponse.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
+    finalResponse.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
 
     return finalResponse;
   } catch (error) {
     console.error('短剧详情获取失败:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    return NextResponse.json({ error: '短剧详情获取失败' }, { status: 502 });
   }
 }

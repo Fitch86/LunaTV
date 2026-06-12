@@ -109,7 +109,7 @@ export async function getRecommendedShortDramas(
     const data = await response.json();
 
     // 内部 API 直接返回数组
-    const result: ShortDramaItem[] = data;
+    const result: ShortDramaItem[] = Array.isArray(data) ? data : [];
 
     // 缓存结果
     await setCache(cacheKey, result, SHORTDRAMA_CACHE_EXPIRE.recommends);

@@ -1,6 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
+
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getConfig } from '@/lib/config';
 import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
+import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
@@ -32,10 +36,13 @@ async function searchFromSource(
     throw new Error(`HTTP error! status: ${listResponse.status}`);
   }
 
-  const listData = await listResponse.json();
+  const listData = await safeJsonParse(listResponse);
+  if (!listData) {
+    throw new Error('分类列表API返回非JSON数据');
+  }
+
   const categories = listData.class || [];
 
-  // 查找"短剧"分类（只要包含"短剧"两个字即可）
   const shortDramaCategory = categories.find(
     (cat: any) => cat.type_name && cat.type_name.includes('短剧')
   );
@@ -62,10 +69,13 @@ async function searchFromSource(
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = await safeJsonParse(response);
+  if (!data) {
+    throw new Error('搜索API返回非JSON数据');
+  }
+
   const items = data.list || [];
 
-  // 过滤出短剧分类的结果
   const shortDramaItems = items.filter(
     (item: any) => item.type_id === categoryId
   );
@@ -90,12 +100,56 @@ async function searchFromSource(
   };
 }
 
-// 服务端专用函数，直接调用外部 API
+// 服务端专用函数，从所有短剧源聚合搜索
 async function searchShortDramasInternal(query: string, page = 1, size = 20) {
-  console.log(
-    `🔍 [SEARCH] 使用默认短剧源：${DEFAULT_SHORT_DRAMA_API}, 搜索词：${query}`
-  );
-  return await searchFromSource(DEFAULT_SHORT_DRAMA_API, query, page, size);
+  try {
+    const config = await getConfig();
+
+    const shortDramaSources = (config.SourceConfig || []).filter(
+      (source: any) => source.type === 'shortdrama' && !source.disabled
+    );
+
+    if (shortDramaSources.length === 0) {
+      console.log(`🔍 [SEARCH] 使用默认短剧源，搜索词：${query}`);
+      return await searchFromSource(DEFAULT_SHORT_DRAMA_API, query, page, size);
+    }
+
+    console.log(`🔍 [SEARCH] 从 ${shortDramaSources.length} 个短剧源聚合搜索`);
+    const results = await Promise.allSettled(
+      shortDramaSources.map((source: any) => searchFromSource(source.api, query, page, size))
+    );
+
+    const allItems: any[] = [];
+    let hasMore = false;
+
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        allItems.push(...result.value.list);
+        hasMore = hasMore || result.value.hasMore;
+      }
+    });
+
+    const uniqueItems = Array.from(
+      new Map(allItems.map((item: any) => [item.name, item])).values()
+    );
+
+    uniqueItems.sort((a: any, b: any) =>
+      new Date(b.update_time).getTime() - new Date(a.update_time).getTime()
+    );
+
+    return {
+      list: uniqueItems.slice(0, size),
+      hasMore,
+    };
+  } catch (error) {
+    console.error('搜索短剧失败:', error);
+    try {
+      return await searchFromSource(DEFAULT_SHORT_DRAMA_API, query, page, size);
+    } catch (fallbackError) {
+      console.error('默认源也失败:', fallbackError);
+      return { list: [], hasMore: false };
+    }
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -121,37 +175,17 @@ export async function GET(request: NextRequest) {
 
     const result = await searchShortDramasInternal(query, pageNum, pageSize);
 
-    // 设置与网页端一致的缓存策略（搜索结果: 1小时）
-    const response = NextResponse.json(result);
-
-    console.log('🕐 [SEARCH] 设置1小时HTTP缓存 - 与网页端搜索缓存一致');
-
-    // 1小时 = 3600秒（搜索结果更新频繁，短期缓存）
     const cacheTime = 3600;
-    response.headers.set(
-      'Cache-Control',
-      `public, max-age=${cacheTime}, s-maxage=${cacheTime}`
-    );
+    const response = NextResponse.json(result);
+    response.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-    response.headers.set(
-      'Vercel-CDN-Cache-Control',
-      `public, s-maxage=${cacheTime}`
-    );
-
-    // 调试信息
-    response.headers.set('X-Cache-Duration', '1hour');
-    response.headers.set(
-      'X-Cache-Expires-At',
-      new Date(Date.now() + cacheTime * 1000).toISOString()
-    );
-    response.headers.set('X-Debug-Timestamp', new Date().toISOString());
-
-    // Vary头确保不同设备有不同缓存
+    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
     response.headers.set('Vary', 'Accept-Encoding, User-Agent');
 
     return response;
   } catch (error) {
     console.error('搜索短剧失败:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    // 返回空结果而非500错误，避免页面白屏
+    return NextResponse.json({ list: [], hasMore: false });
   }
 }

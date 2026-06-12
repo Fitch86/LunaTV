@@ -105,7 +105,7 @@ function getDoubanProxyConfig(): {
   const doubanProxyType =
     localStorage.getItem('doubanDataSource') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE ||
-    'cmliussss-cdn-tencent';
+    'direct';
   const doubanProxy =
     localStorage.getItem('doubanProxyUrl') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY ||
@@ -197,24 +197,34 @@ export async function getDoubanCategories(
 ): Promise<DoubanResult> {
   const { kind, category, type, pageLimit = 20, pageStart = 0 } = params;
   const { proxyType, proxyUrl } = getDoubanProxyConfig();
-  switch (proxyType) {
-    case 'cors-proxy-zwei':
-      return fetchDoubanCategories(params, 'https://ciao-cors.is-an.org/');
-    case 'cmliussss-cdn-tencent':
-      return fetchDoubanCategories(params, '', true, false);
-    case 'cmliussss-cdn-ali':
-      return fetchDoubanCategories(params, '', false, true);
-    case 'cors-anywhere':
-      return fetchDoubanCategories(params, 'https://cors-anywhere.com/');
-    case 'custom':
-      return fetchDoubanCategories(params, proxyUrl);
-    case 'direct':
-    default:
-      const response = await fetch(
-        `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`
-      );
 
-      return response.json();
+  const fetchViaServer = async (): Promise<DoubanResult> => {
+    const response = await fetch(
+      `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`
+    );
+    return response.json();
+  };
+
+  if (proxyType === 'direct') return fetchViaServer();
+
+  try {
+    switch (proxyType) {
+      case 'cors-proxy-zwei':
+        return await fetchDoubanCategories(params, 'https://ciao-cors.is-an.org/');
+      case 'cmliussss-cdn-tencent':
+        return await fetchDoubanCategories(params, '', true, false);
+      case 'cmliussss-cdn-ali':
+        return await fetchDoubanCategories(params, '', false, true);
+      case 'cors-anywhere':
+        return await fetchDoubanCategories(params, 'https://cors-anywhere.com/');
+      case 'custom':
+        return await fetchDoubanCategories(params, proxyUrl);
+      default:
+        return await fetchViaServer();
+    }
+  } catch (error) {
+    console.warn(`豆瓣CDN请求失败(${proxyType})，自动fallback到服务器API:`, (error as Error).message);
+    return fetchViaServer();
   }
 }
 
@@ -230,24 +240,34 @@ export async function getDoubanList(
 ): Promise<DoubanResult> {
   const { tag, type, pageLimit = 20, pageStart = 0 } = params;
   const { proxyType, proxyUrl } = getDoubanProxyConfig();
-  switch (proxyType) {
-    case 'cors-proxy-zwei':
-      return fetchDoubanList(params, 'https://ciao-cors.is-an.org/');
-    case 'cmliussss-cdn-tencent':
-      return fetchDoubanList(params, '', true, false);
-    case 'cmliussss-cdn-ali':
-      return fetchDoubanList(params, '', false, true);
-    case 'cors-anywhere':
-      return fetchDoubanList(params, 'https://cors-anywhere.com/');
-    case 'custom':
-      return fetchDoubanList(params, proxyUrl);
-    case 'direct':
-    default:
-      const response = await fetch(
-        `/api/douban?tag=${tag}&type=${type}&pageSize=${pageLimit}&pageStart=${pageStart}`
-      );
 
-      return response.json();
+  const fetchViaServer = async (): Promise<DoubanResult> => {
+    const response = await fetch(
+      `/api/douban?tag=${tag}&type=${type}&pageSize=${pageLimit}&pageStart=${pageStart}`
+    );
+    return response.json();
+  };
+
+  if (proxyType === 'direct') return fetchViaServer();
+
+  try {
+    switch (proxyType) {
+      case 'cors-proxy-zwei':
+        return await fetchDoubanList(params, 'https://ciao-cors.is-an.org/');
+      case 'cmliussss-cdn-tencent':
+        return await fetchDoubanList(params, '', true, false);
+      case 'cmliussss-cdn-ali':
+        return await fetchDoubanList(params, '', false, true);
+      case 'cors-anywhere':
+        return await fetchDoubanList(params, 'https://cors-anywhere.com/');
+      case 'custom':
+        return await fetchDoubanList(params, proxyUrl);
+      default:
+        return await fetchViaServer();
+    }
+  } catch (error) {
+    console.warn(`豆瓣CDN请求失败(${proxyType})，自动fallback到服务器API:`, (error as Error).message);
+    return fetchViaServer();
   }
 }
 
@@ -393,24 +413,34 @@ export async function getDoubanRecommends(
     sort,
   } = params;
   const { proxyType, proxyUrl } = getDoubanProxyConfig();
-  switch (proxyType) {
-    case 'cors-proxy-zwei':
-      return fetchDoubanRecommends(params, 'https://ciao-cors.is-an.org/');
-    case 'cmliussss-cdn-tencent':
-      return fetchDoubanRecommends(params, '', true, false);
-    case 'cmliussss-cdn-ali':
-      return fetchDoubanRecommends(params, '', false, true);
-    case 'cors-anywhere':
-      return fetchDoubanRecommends(params, 'https://cors-anywhere.com/');
-    case 'custom':
-      return fetchDoubanRecommends(params, proxyUrl);
-    case 'direct':
-    default:
-      const response = await fetch(
-        `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`
-      );
 
-      return response.json();
+  const fetchViaServer = async (): Promise<DoubanResult> => {
+    const response = await fetch(
+      `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`
+    );
+    return response.json();
+  };
+
+  if (proxyType === 'direct') return fetchViaServer();
+
+  try {
+    switch (proxyType) {
+      case 'cors-proxy-zwei':
+        return await fetchDoubanRecommends(params, 'https://ciao-cors.is-an.org/');
+      case 'cmliussss-cdn-tencent':
+        return await fetchDoubanRecommends(params, '', true, false);
+      case 'cmliussss-cdn-ali':
+        return await fetchDoubanRecommends(params, '', false, true);
+      case 'cors-anywhere':
+        return await fetchDoubanRecommends(params, 'https://cors-anywhere.com/');
+      case 'custom':
+        return await fetchDoubanRecommends(params, proxyUrl);
+      default:
+        return await fetchViaServer();
+    }
+  } catch (error) {
+    console.warn(`豆瓣CDN请求失败(${proxyType})，自动fallback到服务器API:`, (error as Error).message);
+    return fetchViaServer();
   }
 }
 

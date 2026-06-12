@@ -646,7 +646,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
           {(config.showHeart || config.showCheckCircle) && (
             <div
               data-button="true"
-              className='absolute bottom-3 right-3 flex gap-3 opacity-0 translate-y-2 transition-all duration-300 ease-in-out sm:group-hover:opacity-100 sm:group-hover:translate-y-0'
+              className='absolute bottom-3 right-3 flex gap-3 transition-all duration-300 ease-in-out sm:group-hover:opacity-100 sm:group-hover:translate-y-0'
               style={{
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
@@ -657,41 +657,63 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
                 return false;
               }}
             >
-              {config.showCheckCircle && (
-                <Trash2
-                  onClick={handleDeleteRecord}
-                  size={20}
-                  className='text-white transition-all duration-300 ease-out hover:stroke-red-500 hover:scale-[1.1]'
-                  style={{
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                  } as React.CSSProperties}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    return false;
-                  }}
-                />
-              )}
-              {config.showHeart && from !== 'search' && (
-                <Heart
-                  onClick={handleToggleFavorite}
-                  size={20}
-                  className={`transition-all duration-300 ease-out ${favorited
-                    ? 'fill-red-600 stroke-red-600'
-                    : 'fill-transparent stroke-white hover:stroke-red-400'
-                    } hover:scale-[1.1]`}
-                  style={{
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                  } as React.CSSProperties}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    return false;
-                  }}
-                />
-              )}
+{config.showCheckCircle && (
+				<button
+					type='button'
+					data-button='true'
+					className='flex items-center justify-center w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm active:scale-110 touch-manipulation'
+					onClick={handleDeleteRecord}
+					onTouchEnd={(e) => {
+						e.stopPropagation();
+						handleDeleteRecord(e as unknown as React.MouseEvent);
+					}}
+					style={{
+						WebkitUserSelect: 'none',
+						userSelect: 'none',
+						WebkitTouchCallout: 'none',
+					} as React.CSSProperties}
+					onContextMenu={(e) => {
+						e.preventDefault();
+						return false;
+					}}
+				>
+					<Trash2
+						size={18}
+						className='text-white pointer-events-none'
+						style={{
+							pointerEvents: 'none',
+						} as React.CSSProperties}
+					/>
+				</button>
+			)}
+{config.showHeart && from !== 'search' && (
+				<button
+					type='button'
+					data-button='true'
+					className='flex items-center justify-center w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm active:scale-110 touch-manipulation'
+					onClick={handleToggleFavorite}
+					style={{
+						WebkitUserSelect: 'none',
+						userSelect: 'none',
+						WebkitTouchCallout: 'none',
+					} as React.CSSProperties}
+					onContextMenu={(e) => {
+						e.preventDefault();
+						return false;
+					}}
+				>
+					<Heart
+						size={18}
+						className={`pointer-events-none ${favorited
+							? 'fill-red-600 stroke-red-600'
+							: 'fill-transparent stroke-white'
+							}`}
+						style={{
+							pointerEvents: 'none',
+						} as React.CSSProperties}
+					/>
+				</button>
+			)}
             </div>
           )}
 

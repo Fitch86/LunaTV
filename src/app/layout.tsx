@@ -52,6 +52,8 @@ export default async function RootLayout({
   let doubanImageProxyType =
     process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
   let doubanImageProxy = process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '';
+let bangumiProxyType = process.env.NEXT_PUBLIC_BANGUMI_PROXY_TYPE || 'direct';
+let bangumiProxy = process.env.NEXT_PUBLIC_BANGUMI_PROXY || '';
   let disableYellowFilter =
     process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true';
   let fluidSearch = process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false';
@@ -69,6 +71,8 @@ export default async function RootLayout({
     doubanProxy = config.SiteConfig.DoubanProxy;
     doubanImageProxyType = config.SiteConfig.DoubanImageProxyType;
     doubanImageProxy = config.SiteConfig.DoubanImageProxy;
+bangumiProxyType = config.SiteConfig.BangumiProxyType || 'direct';
+bangumiProxy = config.SiteConfig.BangumiProxy || '';
     disableYellowFilter = config.SiteConfig.DisableYellowFilter;
     customCategories = config.CustomCategories.filter(
       (category) => !category.disabled
@@ -87,6 +91,8 @@ export default async function RootLayout({
     DOUBAN_PROXY: doubanProxy,
     DOUBAN_IMAGE_PROXY_TYPE: doubanImageProxyType,
     DOUBAN_IMAGE_PROXY: doubanImageProxy,
+BANGUMI_PROXY_TYPE: bangumiProxyType,
+BANGUMI_PROXY: bangumiProxy,
     DISABLE_YELLOW_FILTER: disableYellowFilter,
     CUSTOM_CATEGORIES: customCategories,
     FLUID_SEARCH: fluidSearch,

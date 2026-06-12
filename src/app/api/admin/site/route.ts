@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
       DoubanProxy,
       DoubanImageProxyType,
       DoubanImageProxy,
+      BangumiProxyType,
+      BangumiProxy,
       DisableYellowFilter,
       FluidSearch,
     } = body as {
@@ -48,6 +50,8 @@ export async function POST(request: NextRequest) {
       DoubanProxy: string;
       DoubanImageProxyType: string;
       DoubanImageProxy: string;
+      BangumiProxyType: string;
+      BangumiProxy: string;
       DisableYellowFilter: boolean;
       FluidSearch: boolean;
     };
@@ -62,6 +66,8 @@ export async function POST(request: NextRequest) {
       typeof DoubanProxy !== 'string' ||
       typeof DoubanImageProxyType !== 'string' ||
       typeof DoubanImageProxy !== 'string' ||
+      typeof BangumiProxyType !== 'string' ||
+      typeof BangumiProxy !== 'string' ||
       typeof DisableYellowFilter !== 'boolean' ||
       typeof FluidSearch !== 'boolean'
     ) {
@@ -91,6 +97,8 @@ export async function POST(request: NextRequest) {
       DoubanProxy,
       DoubanImageProxyType,
       DoubanImageProxy,
+      BangumiProxyType,
+      BangumiProxy,
       DisableYellowFilter,
       FluidSearch,
     };

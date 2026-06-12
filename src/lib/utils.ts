@@ -15,7 +15,7 @@ function getDoubanImageProxyConfig(): {
   const doubanImageProxyType =
     localStorage.getItem('doubanImageProxyType') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-    'cmliussss-cdn-tencent';
+    'server';
   const doubanImageProxy =
     localStorage.getItem('doubanImageProxyUrl') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
@@ -32,11 +32,20 @@ function getDoubanImageProxyConfig(): {
 export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
-  // 仅处理豆瓣图片代理
-  if (!originalUrl.includes('doubanio.com')) {
+  // 豆瓣和 Bangumi 图片都需要代理处理
+  const isDoubanImage = originalUrl.includes('doubanio.com');
+  const isBangumiImage = originalUrl.includes('lain.bgm.tv') || originalUrl.includes('pic.bgm.tv');
+
+  if (!isDoubanImage && !isBangumiImage) {
     return originalUrl;
   }
 
+  // Bangumi 图片：走服务端代理（解决 ISP 封锁和 CORS 问题）
+  if (isBangumiImage) {
+    return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+  }
+
+  // 豆瓣图片：根据配置选择代理方式
   const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
   switch (proxyType) {
     case 'server':

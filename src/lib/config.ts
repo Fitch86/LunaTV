@@ -214,6 +214,8 @@ async function getInitConfig(configFile: string, subConfig: {
       DoubanImageProxyType:
         process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent',
       DoubanImageProxy: process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '',
+BangumiProxyType: process.env.NEXT_PUBLIC_BANGUMI_PROXY_TYPE || 'direct',
+BangumiProxy: process.env.NEXT_PUBLIC_BANGUMI_PROXY || '',
       DisableYellowFilter:
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch:

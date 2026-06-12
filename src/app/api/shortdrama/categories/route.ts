@@ -1,6 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
+
 import { NextResponse } from 'next/server';
 
+import { getConfig } from '@/lib/config';
 import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
+import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
@@ -26,7 +30,11 @@ async function getCategoriesFromSource(
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data = await safeJsonParse(response);
+  if (!data) {
+    throw new Error('分类API返回非JSON数据');
+  }
+
   const categories = data.class || [];
 
   // 筛选包含"短剧"的分类
@@ -41,56 +49,72 @@ async function getCategoriesFromSource(
     }));
   }
 
-  // 如果没有找到包含"短剧"的分类，返回所有分类供用户查看
   return categories.map((cat: any) => ({
     type_id: cat.type_id,
     type_name: cat.type_name,
   }));
 }
 
-// 服务端专用函数，直接调用外部 API
+// 服务端专用函数，从所有短剧源聚合分类
 async function getShortDramaCategoriesInternal() {
-  console.log(`📋 [CATEGORIES] 使用默认短剧源：${DEFAULT_SHORT_DRAMA_API}`);
-  return await getCategoriesFromSource(DEFAULT_SHORT_DRAMA_API);
+  try {
+    const config = await getConfig();
+
+    const shortDramaSources = (config.SourceConfig || []).filter(
+      (source: any) => source.type === 'shortdrama' && !source.disabled
+    );
+
+    if (shortDramaSources.length === 0) {
+      console.log(`📋 [CATEGORIES] 使用默认短剧源：${DEFAULT_SHORT_DRAMA_API}`);
+      return await getCategoriesFromSource(DEFAULT_SHORT_DRAMA_API);
+    }
+
+    console.log(`📋 [CATEGORIES] 从 ${shortDramaSources.length} 个短剧源聚合分类`);
+    const results = await Promise.allSettled(
+      shortDramaSources.map((source: any) => getCategoriesFromSource(source.api))
+    );
+
+    const allCategories: { type_id: number; type_name: string }[] = [];
+    const seenNames = new Set<string>();
+
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        for (const cat of result.value) {
+          if (!seenNames.has(cat.type_name)) {
+            seenNames.add(cat.type_name);
+            allCategories.push(cat);
+          }
+        }
+      }
+    });
+
+    return allCategories;
+  } catch (error) {
+    console.error('获取短剧分类失败:', error);
+    try {
+      return await getCategoriesFromSource(DEFAULT_SHORT_DRAMA_API);
+    } catch (fallbackError) {
+      console.error('默认源也失败:', fallbackError);
+      return [];
+    }
+  }
 }
 
 export async function GET() {
   try {
     const categories = await getShortDramaCategoriesInternal();
 
-    // 设置与网页端一致的缓存策略（categories: 4小时）
-    const response = NextResponse.json(categories);
-
-    console.log(
-      '🕐 [CATEGORIES] 设置4小时HTTP缓存 - 与网页端categories缓存一致'
-    );
-
-    // 4小时 = 14400秒（与网页端SHORTDRAMA_CACHE_EXPIRE.categories一致）
     const cacheTime = 14400;
-    response.headers.set(
-      'Cache-Control',
-      `public, max-age=${cacheTime}, s-maxage=${cacheTime}`
-    );
+    const response = NextResponse.json(categories);
+    response.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-    response.headers.set(
-      'Vercel-CDN-Cache-Control',
-      `public, s-maxage=${cacheTime}`
-    );
-
-    // 调试信息
-    response.headers.set('X-Cache-Duration', '4hour');
-    response.headers.set(
-      'X-Cache-Expires-At',
-      new Date(Date.now() + cacheTime * 1000).toISOString()
-    );
-    response.headers.set('X-Debug-Timestamp', new Date().toISOString());
-
-    // Vary头确保不同设备有不同缓存
+    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
     response.headers.set('Vary', 'Accept-Encoding, User-Agent');
 
     return response;
   } catch (error) {
     console.error('获取短剧分类失败:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    // 返回空数组而非500错误，避免页面白屏
+    return NextResponse.json([]);
   }
 }

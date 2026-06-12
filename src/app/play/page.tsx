@@ -135,10 +135,42 @@ function PlayPageClient() {
     }
     return true;
   });
-  const externalDanmuEnabledRef = useRef(externalDanmuEnabled);
-  useEffect(() => {
+const externalDanmuEnabledRef = useRef(externalDanmuEnabled);
+const danmakuObserverRef = useRef<MutationObserver | null>(null);
+useEffect(() => {
     externalDanmuEnabledRef.current = externalDanmuEnabled;
-  }, [externalDanmuEnabled]);
+    enforceDanmakuVisibility();
+}, [externalDanmuEnabled]);
+
+// 弹幕可见性强制控制：通过MutationObserver + inline !important
+// 无论插件内部如何调用show()/load()/reset()，都能保持弹幕关闭
+const enforceDanmakuVisibility = () => {
+    const $danmuku = document.querySelector('.art-danmuku') as HTMLElement | null;
+    if (!$danmuku) return;
+    if (!externalDanmuEnabledRef.current) {
+        $danmuku.style.setProperty('opacity', '0', 'important');
+        $danmuku.style.setProperty('pointer-events', 'none', 'important');
+    } else {
+        $danmuku.style.removeProperty('opacity');
+        $danmuku.style.removeProperty('pointer-events');
+    }
+};
+
+const startDanmakuObserver = () => {
+    if (danmakuObserverRef.current) danmakuObserverRef.current.disconnect();
+    const $danmuku = document.querySelector('.art-danmuku');
+    if (!$danmuku) return;
+    const observer = new MutationObserver(() => {
+        if (!externalDanmuEnabledRef.current) {
+            const el = $danmuku as HTMLElement;
+            if (el.style.opacity !== '0') {
+                el.style.setProperty('opacity', '0', 'important');
+            }
+        }
+    });
+    observer.observe($danmuku, { attributes: true, attributeFilter: ['style'] });
+    danmakuObserverRef.current = observer;
+};
 
   // 视频基本信息
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
@@ -450,21 +482,47 @@ function PlayPageClient() {
       }
     });
 
+    // 3. 去除季数后缀变体（如" 第二季"、"第2季"、"S2"等）
+    // 视频源可能以不同方式标注季数，也可能只列基础标题
+    const seasonPatterns = [
+      /\s*第[一二三四五六七八九十\d]+季\s*$/,   // "第二季", "第2季"
+      /\s*Season\s*\d+\s*$/i,                    // "Season 2"
+      /\s*S\d+\s*$/i,                             // "S2"
+      /\s*[Ss]\d+\s*$/,                           // "s2"
+    ];
+    for (const pattern of seasonPatterns) {
+      const withoutSeason = trimmed.replace(pattern, '').trim();
+      if (withoutSeason && withoutSeason !== trimmed && !variants.includes(withoutSeason)) {
+        variants.push(withoutSeason);
+        break; // 只取第一个匹配的变体，避免重复
+      }
+    }
+
+    // 4. 提取中文主标题（剥离英文副标题）
+    // 如 "北斗神拳 -FIST OF THE NORTH STAR-" → "北斗神拳"
+    const chineseMainTitle = trimmed.match(/^([\u4e00-\u9fff]+)/);
+    if (chineseMainTitle && chineseMainTitle[1].length >= 2) {
+      const mainTitle = chineseMainTitle[1].trim();
+      if (mainTitle !== trimmed && !variants.includes(mainTitle)) {
+        variants.push(mainTitle);
+      }
+    }
+
     // 如果包含空格，生成额外变体
     if (trimmed.includes(' ')) {
-      // 3. 去除所有空格
+      // 5. 去除所有空格
       const noSpaces = trimmed.replace(/\s+/g, '');
       if (noSpaces !== trimmed) {
         variants.push(noSpaces);
       }
 
-      // 4. 标准化空格（多个空格合并为一个）
+      // 6. 标准化空格（多个空格合并为一个）
       const normalizedSpaces = trimmed.replace(/\s+/g, ' ');
       if (normalizedSpaces !== trimmed && !variants.includes(normalizedSpaces)) {
         variants.push(normalizedSpaces);
       }
 
-      // 5. 提取关键词组合
+      // 7. 提取关键词组合
       const keywords = trimmed.split(/\s+/);
       if (keywords.length >= 2) {
         const mainKeyword = keywords[0];
@@ -479,21 +537,45 @@ function PlayPageClient() {
       }
     }
 
+    console.log('🔍 搜索变体:', variants);
     return variants;
   };
 
-  // 获取bangumi详情
+  // 获取bangumi详情（通过服务器代理，避免ISP封锁）
   const fetchBangumiDetails = async (bangumiId: number) => {
 
     try {
-      const response = await fetch(`https://api.bgm.tv/v0/subjects/${bangumiId}`);
+      // 优先使用服务器代理路由，与 bangumi.client.ts 保持一致
+      const proxyConfig = typeof window !== 'undefined' ? {
+        type: localStorage.getItem('bangumiDataSource') || (window as any).RUNTIME_CONFIG?.BANGUMI_PROXY_TYPE || '',
+        url: localStorage.getItem('bangumiProxyUrl') || (window as any).RUNTIME_CONFIG?.BANGUMI_PROXY || '',
+      } : { type: '', url: '' };
+
+      let fetchUrl = `/api/proxy/bangumi?path=v0/subjects/${bangumiId}`;
+      if (proxyConfig.type) {
+        fetchUrl += `&proxy=${encodeURIComponent(proxyConfig.type)}`;
+      }
+      if (proxyConfig.url) {
+        fetchUrl += `&proxyUrl=${encodeURIComponent(proxyConfig.url)}`;
+      }
+
+      const response = await fetch(fetchUrl);
       if (response.ok) {
         const bangumiData = await response.json();
-      
         return bangumiData;
       }
     } catch (error) {
-      console.log('Failed to fetch bangumi details:', error);
+      console.log('Failed to fetch bangumi details via proxy:', error);
+      // 回退到直连
+      try {
+        const response = await fetch(`https://api.bgm.tv/v0/subjects/${bangumiId}`);
+        if (response.ok) {
+          const bangumiData = await response.json();
+          return bangumiData;
+        }
+      } catch (fallbackError) {
+        console.log('Failed to fetch bangumi details directly:', fallbackError);
+      }
     }
     return null;
   };
@@ -789,6 +871,11 @@ function PlayPageClient() {
 
   // 清理播放器资源的统一函数
   const cleanupPlayer = () => {
+    // 清理弹幕观察者
+    if (danmakuObserverRef.current) {
+        danmakuObserverRef.current.disconnect();
+        danmakuObserverRef.current = null;
+    }
     // 🚀 新增：清理弹幕优化相关的定时器
     if (danmuOperationTimeoutRef.current) {
       clearTimeout(danmuOperationTimeoutRef.current);
@@ -1027,6 +1114,7 @@ function PlayPageClient() {
               if (externalDanmuEnabledRef.current && artPlayerRef.current?.plugins?.artplayerPluginDanmuku) {
                 plugin.load(externalDanmu);
                 plugin.show();
+      enforceDanmakuVisibility();
                 console.log('✅ 外部弹幕已优化加载:', externalDanmu.length, '条');
                 
                 if (artPlayerRef.current && externalDanmu.length > 0) {
@@ -1260,13 +1348,11 @@ function PlayPageClient() {
             if (externalDanmu.length > 0) {
               console.log('✅ 向播放器插件重新加载弹幕数据:', externalDanmu.length, '条');
               plugin.load(externalDanmu);
-              
-              // 恢复弹幕插件的状态
-              if (danmuPluginStateRef.current) {
-                if (!danmuPluginStateRef.current.isHide) {
-                  plugin.show();
-                }
+              // load() internally calls show(), re-sync plugin state with user preference
+              if (!externalDanmuEnabledRef.current) {
+                plugin.hide();
               }
+      enforceDanmakuVisibility();
               
               if (artPlayerRef.current) {
                 artPlayerRef.current.notice.show = `已加载 ${externalDanmu.length} 条弹幕`;
@@ -1328,28 +1414,29 @@ function PlayPageClient() {
         // 检查是否需要清理缓存
         const clearCache = searchParams.get('clear_cache') === 'true';
         const searchUrl = `/api/search?q=${encodeURIComponent(query.trim())}${clearCache ? '&clear_cache=true' : ''}`;
-        
+
         const response = await fetch(searchUrl);
         if (!response.ok) {
           throw new Error('搜索失败');
         }
         const data = await response.json();
-        
+
         // 处理搜索结果，根据规则过滤
         const currentTitle = videoTitleRef.current.replaceAll(' ', '').toLowerCase();
+        const normalizedQuery = query.replaceAll(' ', '').toLowerCase();
         const results = data.results.filter(
           (result: SearchResult) => {
             const resultTitle = result.title.replaceAll(' ', '').toLowerCase();
-            
-            // 对于 bangumi ID，使用更宽松的匹配规则
-            const isBangumiSearch = bangumiSubjectId > 0;
-            const titleMatches = isBangumiSearch 
-              ? (resultTitle.includes(currentTitle) || currentTitle.includes(resultTitle))
-              : resultTitle === currentTitle;
-            
+
+            // 双重匹配：与原始标题和搜索查询都进行匹配
+            // 当搜索变体（如去掉季数后缀）时，搜索变体本身也作为匹配依据
+            const matchesOriginal = resultTitle.includes(currentTitle) || currentTitle.includes(resultTitle);
+            const matchesQuery = resultTitle.includes(normalizedQuery) || normalizedQuery.includes(resultTitle);
+            const titleMatches = matchesOriginal || matchesQuery;
+
             return titleMatches &&
               (videoYearRef.current
-                ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
+                ? (result.year.toLowerCase().includes(videoYearRef.current.toLowerCase()) || videoYearRef.current.toLowerCase().includes(result.year.toLowerCase()))
                 : true) &&
               (searchType
                 ? (searchType === 'tv' && (result.episodes?.length ?? 0) > 1) ||
@@ -1357,8 +1444,8 @@ function PlayPageClient() {
                 : true);
           }
         );
-        
-        
+
+
         setAvailableSources(results);
         return results;
       } catch (err) {
@@ -1442,20 +1529,48 @@ function PlayPageClient() {
           }
         }
         
-        // 如果是 bangumi 且没有结果，尝试特定的替代标题
+        // 如果是 bangumi 且没有结果，尝试获取 bangumi 详情获取更多标题变体
         if (currentBangumiId && allResults.length === 0) {
-          const alternativeTitles = ['海贼王', 'ONE PIECE', '航海王'];
-          for (const altTitle of alternativeTitles) {
-            if (!searchVariants.includes(altTitle)) {
-              try {
-                const altResults = await fetchSourcesData(altTitle);
-                if (altResults && altResults.length > 0) {
-                  allResults.push(...altResults);
-                  setVideoTitle(altTitle);
-                  break;
+          console.log('🔍 番剧搜索无结果，尝试从 bangumi 获取更多标题信息...');
+          const bangumiData = await fetchBangumiDetails(currentBangumiId);
+          if (bangumiData) {
+            // 尝试英文名、中文短名等
+            const altTitles: string[] = [];
+            if (bangumiData.name && bangumiData.name !== searchTitleToUse) {
+              altTitles.push(bangumiData.name);
+            }
+            if (bangumiData.name_cn && bangumiData.name_cn !== searchTitleToUse) {
+              altTitles.push(bangumiData.name_cn);
+            }
+            // 如有 infobox 中的别名
+            if (bangumiData.infobox) {
+              for (const item of bangumiData.infobox) {
+                if (item.key === '别名' || item.key === '中文名' || item.key === '英文名' || item.key === '简中别名' || item.key === '繁中别名') {
+                  const values = Array.isArray(item.value) ? item.value.map((v: any) => v.v || v) : [item.value];
+                  for (const val of values) {
+                    const title = typeof val === 'string' ? val : (val as any)?.v || String(val);
+                    if (title && title !== searchTitleToUse && !altTitles.includes(title)) {
+                      altTitles.push(title);
+                    }
+                  }
                 }
-              } catch (error) {
-                console.warn(`替代标题 "${altTitle}" 搜索失败:`, error);
+              }
+            }
+            for (const altTitle of altTitles) {
+              if (!searchVariants.includes(altTitle)) {
+                try {
+                  const altVariants = generateSearchVariants(altTitle);
+                  for (const v of altVariants) {
+                    console.log(`🔍 尝试替代标题变体: "${v}"`);
+                    const altResults = await fetchSourcesData(v);
+                    if (altResults && altResults.length > 0) {
+                      allResults.push(...altResults);
+                    }
+                  }
+                  if (allResults.length > 0) break;
+                } catch (error) {
+                  console.warn(`替代标题 "${altTitle}" 搜索失败:`, error);
+                }
               }
             }
           }
@@ -1759,6 +1874,8 @@ function PlayPageClient() {
                 // 先加载前500条，快速显示
                 const firstBatch = danmuData.slice(0, 500);
                 plugin.load(firstBatch);
+                if (!externalDanmuEnabledRef.current) plugin.hide();
+      enforceDanmakuVisibility();
 
                 // 剩余弹幕分批异步加载，避免阻塞
                 const remainingBatches = [];
@@ -1782,6 +1899,8 @@ function PlayPageClient() {
               } else {
                 // 弹幕数量较少，正常加载
                 plugin.load(danmuData);
+                if (!externalDanmuEnabledRef.current) plugin.hide();
+            enforceDanmakuVisibility();
                 console.log(`✅ 换源后弹幕加载完成: ${danmuData.length} 条`);
               }
 
@@ -2417,6 +2536,10 @@ function PlayPageClient() {
                 intro_time: 0,
                 outro_time: 0,
               });
+
+// 启动弹幕可见性观察器，防止插件内部自动打开弹幕
+startDanmakuObserver();
+enforceDanmakuVisibility();
               return '';
             },
           },
@@ -2481,6 +2604,9 @@ function PlayPageClient() {
 
       // 监听播放器事件
       artPlayerRef.current.on('ready', () => {
+    // 启动弹幕可见性监控，防止插件内部show()自动打开弹幕
+    startDanmakuObserver();
+    enforceDanmakuVisibility();
         setError(null);
 
         // 播放器就绪后，如果正在播放则请求 Wake Lock
@@ -2561,7 +2687,8 @@ function PlayPageClient() {
         updateLoadingState('success', '视频可以播放');
 
         // 🚀 播放器准备就绪后加载弹幕
-        if (artPlayerRef.current?.plugins?.artplayerPluginDanmuku && externalDanmuEnabledRef.current) {
+      const danmuLoadKey = `${videoTitle}_${videoYear}_${videoDoubanId}_${currentEpisodeIndex + 1}`;
+      if (artPlayerRef.current?.plugins?.artplayerPluginDanmuku && externalDanmuEnabledRef.current && lastDanmuLoadKeyRef.current !== danmuLoadKey) {
           console.log('🎬 播放器就绪，开始加载弹幕...');
           
           setTimeout(async () => {
@@ -2572,7 +2699,9 @@ function PlayPageClient() {
               if (danmuData.length > 0 && artPlayerRef.current?.plugins?.artplayerPluginDanmuku) {
                 const plugin = artPlayerRef.current.plugins.artplayerPluginDanmuku;
                 plugin.load(danmuData);
-                plugin.show();
+                // load() internally calls show(), so re-sync plugin state with user preference
+                if (!externalDanmuEnabledRef.current) plugin.hide();
+    enforceDanmakuVisibility();
                 
                 const loadTime = Math.round(performance.now() - startTime);
                 console.log(`✅ 弹幕加载完成: ${danmuData.length} 条，耗时 ${loadTime}ms`);

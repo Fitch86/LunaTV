@@ -35,17 +35,17 @@ interface RemoteChangelogEntry {
 const compareVersions = (versionA: string, versionB: string): number => {
   const partsA = versionA.split('.').map(Number);
   const partsB = versionB.split('.').map(Number);
-  
+
   const maxLength = Math.max(partsA.length, partsB.length);
-  
+
   for (let i = 0; i < maxLength; i++) {
     const partA = partsA[i] || 0;
     const partB = partsB[i] || 0;
-    
+
     if (partA > partB) return 1;
     if (partA < partB) return -1;
   }
-  
+
   return 0; // 版本号相同
 };
 
@@ -99,7 +99,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
   const fetchRemoteChangelog = async () => {
     try {
       const response = await fetch(
-        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newdanmu/CHANGELOG'
+        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newshort/CHANGELOG'
       );
       if (response.ok) {
         const content = await response.text();
@@ -128,13 +128,13 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
     try {
       // 先获取远程版本号
       const response = await fetch(
-        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newdanmu/VERSION.txt'
+        'https://raw.githubusercontent.com/Fitch86/LunaTV/refs/heads/newshort/VERSION.txt'
       );
       if (response.ok) {
         const remoteVersion = (await response.text()).trim();
         console.log('[VersionPanel] 获取到远程版本:', remoteVersion);
         setLatestVersion(remoteVersion);
-        
+
         // 然后检查更新状态
         const updateStatus = await checkForUpdates();
         console.log('[VersionPanel] 更新状态:', updateStatus);
@@ -151,21 +151,21 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
       .replace(/^\uFEFF/, '') // 移除 BOM
       .replace(/\r\n/g, '\n') // 统一换行符为 \n
       .trim(); // 移除首尾空白
-  
+
     const lines = normalizedContent.split('\n');
     const versions: RemoteChangelogEntry[] = [];
     let currentVersion: RemoteChangelogEntry | null = null;
     let currentSection: 'added' | 'changed' | 'fixed' | null = null;
-  
+
     // 2. 更宽松的正则表达式
     const versionRegex = /^##\s*\[([\d.]+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/;
-  
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue; // 跳过空行
-  
+
       const versionMatch = line.match(versionRegex);
-  
+
       if (versionMatch) {
         if (currentVersion) {
           versions.push(currentVersion);
@@ -180,14 +180,17 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
         currentSection = null;
         continue;
       }
-  
+
       // 3. 检查是否是章节标题
       const sectionMatch = line.match(/^###\s+([^\n]+)/i);
       if (sectionMatch) {
         const section = sectionMatch[1].toLowerCase();
         if (section.includes('added') || section.includes('新增功能')) {
           currentSection = 'added';
-        } else if (section.includes('changed') || section.includes('功能改进')) {
+        } else if (
+          section.includes('changed') ||
+          section.includes('功能改进')
+        ) {
           currentSection = 'changed';
         } else if (section.includes('fixed') || section.includes('问题修复')) {
           currentSection = 'fixed';
@@ -196,7 +199,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
         }
         continue;
       }
-  
+
       // 4. 如果是列表项且当前有活动版本和章节
       if (currentVersion && currentSection && /^\s*[-*]\s+/.test(line)) {
         const item = line.replace(/^\s*[-*]\s+/, '').trim();
@@ -205,16 +208,16 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
         }
       }
     }
-  
+
     // 5. 添加最后一个版本
     if (currentVersion) {
       versions.push(currentVersion);
     }
-  
+
     console.log('解析结果:', versions);
     return versions;
   };
-  
+
   // 渲染变更日志条目
   const renderChangelogEntry = (
     entry: ChangelogEntry | RemoteChangelogEntry,
@@ -403,7 +406,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                     </div>
                   </div>
                   <a
-                    href='https://github.com/Fitch86/LunaTV/tree/newdanmu'
+                    href='https://github.com/Fitch86/LunaTV/tree/newshort'
                     target='_blank'
                     rel='noopener noreferrer'
                     className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
@@ -433,7 +436,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                     </div>
                   </div>
                   <a
-                    href='https://github.com/Fitch86/LunaTV/tree/newdanmu'
+                    href='https://github.com/Fitch86/LunaTV/tree/newshort'
                     target='_blank'
                     rel='noopener noreferrer'
                     className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
@@ -474,7 +477,10 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                 {showRemoteContent && remoteChangelog.length > 0 && (
                   <div className='space-y-4'>
                     {remoteChangelog
-                      .filter(entry => compareVersions(entry.version, CURRENT_VERSION) > 0)
+                      .filter(
+                        (entry) =>
+                          compareVersions(entry.version, CURRENT_VERSION) > 0
+                      )
                       .map((entry, index) => (
                         <div
                           key={index}

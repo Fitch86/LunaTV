@@ -265,6 +265,8 @@ interface SiteConfig {
   DoubanProxy: string;
   DoubanImageProxyType: string;
   DoubanImageProxy: string;
+  BangumiProxyType: string;
+  BangumiProxy: string;
   DisableYellowFilter: boolean;
   FluidSearch: boolean;
 }
@@ -3391,13 +3393,16 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     DoubanProxy: '',
     DoubanImageProxyType: 'cmliussss-cdn-tencent',
     DoubanImageProxy: '',
+BangumiProxyType: 'direct',
+BangumiProxy: '',
     DisableYellowFilter: false,
     FluidSearch: true,
   });
 
   // 豆瓣数据源相关状态
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
-  const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
+  const [isBangumiProxyDropdownOpen, setIsBangumiProxyDropdownOpen] = useState(false);
+const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
     useState(false);
 
   // 豆瓣数据源选项
@@ -3411,6 +3416,16 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
     { value: 'custom', label: '自定义代理' },
   ];
+
+// 番剧数据代理选项
+const bangumiDataSourceOptions = [
+  { value: 'direct', label: '直连（服务器直接请求 Bangumi）' },
+  { value: 'cmliussss-cdn-tencent', label: 'Bangumi CDN By CMLiussss（腾讯云）' },
+  { value: 'cmliussss-cdn-ali', label: 'Bangumi CDN By CMLiussss（阿里云）' },
+  { value: 'cors-proxy-zwei', label: 'Cors Proxy By Zwei' },
+  { value: 'cors-anywhere', label: 'Cors Anywhere' },
+  { value: 'custom', label: '自定义代理' },
+];
 
   // 豆瓣图片代理选项
   const doubanImageProxyTypeOptions = [
@@ -3453,6 +3468,8 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
         DoubanImageProxyType:
           config.SiteConfig.DoubanImageProxyType || 'cmliussss-cdn-tencent',
         DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
+BangumiProxyType: config.SiteConfig.BangumiProxyType || 'direct',
+BangumiProxy: config.SiteConfig.BangumiProxy || '',
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
         FluidSearch: config.SiteConfig.FluidSearch || true,
       });
@@ -3494,6 +3511,23 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     }
   }, [isDoubanImageProxyDropdownOpen]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isBangumiProxyDropdownOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown="bangumi-datasource"]')) {
+          setIsBangumiProxyDropdownOpen(false);
+        }
+      }
+    };
+
+    if (isBangumiProxyDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () =>
+        document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isBangumiProxyDropdownOpen]);
+
   // 处理豆瓣数据源变化
   const handleDoubanDataSourceChange = (value: string) => {
     setSiteSettings((prev) => ({
@@ -3507,6 +3541,13 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     setSiteSettings((prev) => ({
       ...prev,
       DoubanImageProxyType: value,
+    }));
+  };
+
+  const handleBangumiDataSourceChange = (value: string) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      BangumiProxyType: value,
     }));
   };
 
@@ -3800,6 +3841,81 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
           </div>
         )}
       </div>
+
+{/* 番剧数据代理设置 */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+    番剧数据代理
+  </label>
+  <div className='relative' data-dropdown='bangumi-datasource'>
+    <button
+      type='button'
+      onClick={() => setIsBangumiProxyDropdownOpen(!isBangumiProxyDropdownOpen)}
+      className="w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left"
+    >
+      {
+        bangumiDataSourceOptions.find(
+          (option) => option.value === siteSettings.BangumiProxyType
+        )?.label
+      }
+    </button>
+    <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
+      <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+        isBangumiProxyDropdownOpen ? 'rotate-180' : ''
+      }`} />
+    </div>
+    {isBangumiProxyDropdownOpen && (
+      <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
+        {bangumiDataSourceOptions.map((option) => (
+          <button
+            key={option.value}
+            type='button'
+            onClick={() => {
+              handleBangumiDataSourceChange(option.value);
+              setIsBangumiProxyDropdownOpen(false);
+            }}
+            className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+              siteSettings.BangumiProxyType === option.value
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                : 'text-gray-900 dark:text-gray-100'
+            }`}
+          >
+            <span className='truncate'>{option.label}</span>
+            {siteSettings.BangumiProxyType === option.value && (
+              <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
+            )}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+    选择获取 Bangumi（番组计划）数据的方式，当服务器无法直连 api.bgm.tv 时需设置代理
+  </p>
+</div>
+{/* 番剧代理地址设置 - 仅在选择自定义代理时显示 */}
+{siteSettings.BangumiProxyType === 'custom' && (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      番剧代理地址
+    </label>
+    <input
+      type='text'
+      placeholder='例如: https://proxy.example.com/fetch?url='
+      value={siteSettings.BangumiProxy}
+      onChange={(e) =>
+        setSiteSettings((prev) => ({
+          ...prev,
+          BangumiProxy: e.target.value,
+        }))
+      }
+      className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
+    />
+    <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+      自定义番剧数据代理服务器地址
+    </p>
+  </div>
+)}
 
       {/* 搜索接口可拉取最大页数 */}
       <div>
