@@ -42,7 +42,10 @@ sitemap.xml
 sitemap-*.xml
 
 # generated files
-src/lib/runtime.ts
 public/manifest.json
 public/sw.js
-public/workbox-*.js
+public/workbox-*.js.claude/
+server*.log
+.claude
+public/workbox-e9849328.js
+src/app/api/proxy/
