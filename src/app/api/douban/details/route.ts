@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
+import { fetchWithProxy } from '@/lib/fetch-with-proxy';
 
 // 用户代理池
 const USER_AGENTS = [
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
       },
     };
 
-    const response = await fetch(target, fetchOptions);
+    const response = await fetchWithProxy(target, fetchOptions);
     clearTimeout(timeoutId);
 
     if (!response.ok) {

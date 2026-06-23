@@ -78,6 +78,9 @@ export const UserMenu: React.FC = () => {
   const [bangumiDataSource, setBangumiDataSource] = useState('direct');
   const [bangumiProxyUrl, setBangumiProxyUrl] = useState('');
   const [isBangumiDropdownOpen, setIsBangumiDropdownOpen] = useState(false);
+  const [bangumiImageProxyType, setBangumiImageProxyType] = useState('server');
+  const [bangumiImageProxyUrl, setBangumiImageProxyUrl] = useState('');
+  const [isBangumiImageDropdownOpen, setIsBangumiImageDropdownOpen] = useState(false);
 
   // 豆瓣数据源选项
   const doubanDataSourceOptions = [
@@ -88,6 +91,7 @@ export const UserMenu: React.FC = () => {
       label: '豆瓣 CDN By CMLiussss（腾讯云）',
     },
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
+    { value: 'cmliussss-unified', label: 'CDN By CMLiussss（统一域名）' },
     { value: 'custom', label: '自定义代理' },
   ];
 
@@ -111,6 +115,15 @@ export const UserMenu: React.FC = () => {
       label: '豆瓣 CDN By CMLiussss（腾讯云）',
     },
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
+    { value: 'baidu', label: '百度图片代理' },
+    { value: 'custom', label: '自定义代理' },
+  ];
+
+  // Bangumi 图片代理选项
+  const bangumiImageProxyTypeOptions = [
+    { value: 'server', label: '服务器代理（默认）' },
+    { value: 'cmliussss', label: 'Bangumi 图片 CDN By CMLiussss' },
+    { value: 'direct', label: '直连（浏览器直接请求 Bangumi 图片）' },
     { value: 'custom', label: '自定义代理' },
   ];
 
@@ -229,6 +242,25 @@ export const UserMenu: React.FC = () => {
       } else if (defaultBangumiProxy) {
         setBangumiProxyUrl(defaultBangumiProxy);
       }
+
+      // Bangumi 图片代理设置
+      const savedBangumiImageProxyType = localStorage.getItem('bangumiImageProxyType');
+      const defaultBangumiImageProxyType =
+        (window as any).RUNTIME_CONFIG?.BANGUMI_IMAGE_PROXY_TYPE || 'server';
+      if (savedBangumiImageProxyType !== null) {
+        setBangumiImageProxyType(savedBangumiImageProxyType);
+      } else if (defaultBangumiImageProxyType) {
+        setBangumiImageProxyType(defaultBangumiImageProxyType);
+      }
+
+      const savedBangumiImageProxyUrl = localStorage.getItem('bangumiImageProxyUrl');
+      const defaultBangumiImageProxy =
+        (window as any).RUNTIME_CONFIG?.BANGUMI_IMAGE_PROXY || '';
+      if (savedBangumiImageProxyUrl !== null) {
+        setBangumiImageProxyUrl(savedBangumiImageProxyUrl);
+      } else if (defaultBangumiImageProxy) {
+        setBangumiImageProxyUrl(defaultBangumiImageProxy);
+      }
     }
   }, []);
 
@@ -299,6 +331,23 @@ export const UserMenu: React.FC = () => {
         document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isBangumiDropdownOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isBangumiImageDropdownOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown="bangumi-image-proxy"]')) {
+          setIsBangumiImageDropdownOpen(false);
+        }
+      }
+    };
+
+    if (isBangumiImageDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () =>
+        document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isBangumiImageDropdownOpen]);
 
   const handleMenuClick = () => {
     setIsOpen(!isOpen);
@@ -473,6 +522,20 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const handleBangumiImageProxyChange = (value: string) => {
+    setBangumiImageProxyType(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bangumiImageProxyType', value);
+    }
+  };
+
+  const handleBangumiImageProxyUrlChange = (value: string) => {
+    setBangumiImageProxyUrl(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bangumiImageProxyUrl', value);
+    }
+  };
+
   // 获取感谢信息
   const getThanksInfo = (dataSource: string) => {
     switch (dataSource) {
@@ -505,6 +568,10 @@ export const UserMenu: React.FC = () => {
       (window as any).RUNTIME_CONFIG?.BANGUMI_PROXY_TYPE || 'direct';
     const defaultBangumiProxy =
       (window as any).RUNTIME_CONFIG?.BANGUMI_PROXY || '';
+    const defaultBangumiImageProxyType =
+      (window as any).RUNTIME_CONFIG?.BANGUMI_IMAGE_PROXY_TYPE || 'server';
+    const defaultBangumiImageProxyUrl =
+      (window as any).RUNTIME_CONFIG?.BANGUMI_IMAGE_PROXY || '';
     const defaultFluidSearch =
       (window as any).RUNTIME_CONFIG?.FLUID_SEARCH !== false;
 
@@ -518,6 +585,8 @@ export const UserMenu: React.FC = () => {
     setDoubanImageProxyUrl(defaultDoubanImageProxyUrl);
     setBangumiDataSource(defaultBangumiProxyType);
     setBangumiProxyUrl(defaultBangumiProxy);
+    setBangumiImageProxyType(defaultBangumiImageProxyType);
+    setBangumiImageProxyUrl(defaultBangumiImageProxyUrl);
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
@@ -530,6 +599,8 @@ export const UserMenu: React.FC = () => {
       localStorage.setItem('doubanImageProxyUrl', defaultDoubanImageProxyUrl);
       localStorage.setItem('bangumiDataSource', defaultBangumiProxyType);
       localStorage.setItem('bangumiProxyUrl', defaultBangumiProxy);
+      localStorage.setItem('bangumiImageProxyType', defaultBangumiImageProxyType);
+      localStorage.setItem('bangumiImageProxyUrl', defaultBangumiImageProxyUrl);
     }
   };
 
@@ -854,110 +925,6 @@ export const UserMenu: React.FC = () => {
               </div>
             )}
 
-            {/* 分割线 */}
-            <div className='border-t border-gray-200 dark:border-gray-700'></div>
-
-            {/* 番剧数据源选择 */}
-            <div className='space-y-3'>
-              <div>
-                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-                  番剧数据代理
-                </h4>
-                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
-                  选择获取番剧数据的方式
-                </p>
-              </div>
-              <div className='relative' data-dropdown='bangumi-datasource'>
-                {/* 自定义下拉选择框 */}
-                <button
-                  type='button'
-                  onClick={() => setIsBangumiDropdownOpen(!isBangumiDropdownOpen)}
-                  className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-                >
-                  {
-                    bangumiDataSourceOptions.find(
-                      (option) => option.value === bangumiDataSource
-                    )?.label
-                  }
-                </button>
-
-                {/* 下拉箭头 */}
-                <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-                  <ChevronDown
-                    className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isBangumiDropdownOpen ? 'rotate-180' : ''
-                      }`}
-                  />
-                </div>
-
-                {/* 下拉选项列表 */}
-                {isBangumiDropdownOpen && (
-                  <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                    {bangumiDataSourceOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type='button'
-                        onClick={() => {
-                          handleBangumiDataSourceChange(option.value);
-                          setIsBangumiDropdownOpen(false);
-                        }}
-                        className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${bangumiDataSource === option.value
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                          : 'text-gray-900 dark:text-gray-100'
-                          }`}
-                      >
-                        <span className='truncate'>{option.label}</span>
-                        {bangumiDataSource === option.value && (
-                          <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 感谢信息 */}
-              {getThanksInfo(bangumiDataSource) && (
-                <div className='mt-3'>
-                  <button
-                    type='button'
-                    onClick={() =>
-                      window.open(getThanksInfo(bangumiDataSource)!.url, '_blank')
-                    }
-                    className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
-                  >
-                    <span className='font-medium'>
-                      {getThanksInfo(bangumiDataSource)!.text}
-                    </span>
-                    <ExternalLink className='w-3.5 opacity-70' />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 番剧代理地址设置 - 仅在选择自定义代理时显示 */}
-            {bangumiDataSource === 'custom' && (
-              <div className='space-y-3'>
-                <div>
-                  <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-                    番剧代理地址
-                  </h4>
-                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
-                    自定义番剧代理服务器地址
-                  </p>
-                </div>
-                <input
-                  type='text'
-                  className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
-                  placeholder='例如: https://proxy.example.com/bangumi/'
-                  value={bangumiProxyUrl}
-                  onChange={(e) => handleBangumiProxyUrlChange(e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* 分割线 */}
-            <div className='border-t border-gray-200 dark:border-gray-700'></div>
-
             {/* 豆瓣图片代理设置 */}
             <div className='space-y-3'>
               <div>
@@ -1067,6 +1034,182 @@ export const UserMenu: React.FC = () => {
 
             {/* 分割线 */}
             <div className='border-t border-gray-200 dark:border-gray-700'></div>
+
+            {/* Bangumi 数据代理选择 */}
+            <div className='space-y-3'>
+              <div>
+                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                  Bangumi 数据代理
+                </h4>
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                  选择获取番剧数据的方式
+                </p>
+              </div>
+              <div className='relative' data-dropdown='bangumi-datasource'>
+                {/* 自定义下拉选择框 */}
+                <button
+                  type='button'
+                  onClick={() => setIsBangumiDropdownOpen(!isBangumiDropdownOpen)}
+                  className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
+                >
+                  {
+                    bangumiDataSourceOptions.find(
+                      (option) => option.value === bangumiDataSource
+                    )?.label
+                  }
+                </button>
+
+                {/* 下拉箭头 */}
+                <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isBangumiDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                  />
+                </div>
+
+                {/* 下拉选项列表 */}
+                {isBangumiDropdownOpen && (
+                  <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
+                    {bangumiDataSourceOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type='button'
+                        onClick={() => {
+                          handleBangumiDataSourceChange(option.value);
+                          setIsBangumiDropdownOpen(false);
+                        }}
+                        className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${bangumiDataSource === option.value
+                          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                          : 'text-gray-900 dark:text-gray-100'
+                          }`}
+                      >
+                        <span className='truncate'>{option.label}</span>
+                        {bangumiDataSource === option.value && (
+                          <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 感谢信息 */}
+              {getThanksInfo(bangumiDataSource) && (
+                <div className='mt-3'>
+                  <button
+                    type='button'
+                    onClick={() =>
+                      window.open(getThanksInfo(bangumiDataSource)!.url, '_blank')
+                    }
+                    className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
+                  >
+                    <span className='font-medium'>
+                      {getThanksInfo(bangumiDataSource)!.text}
+                    </span>
+                    <ExternalLink className='w-3.5 opacity-70' />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Bangumi 代理地址设置 - 仅在选择自定义代理时显示 */}
+            {bangumiDataSource === 'custom' && (
+              <div className='space-y-3'>
+                <div>
+                  <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                    Bangumi 数据代理
+                  </h4>
+                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                    自定义番剧代理服务器地址
+                  </p>
+                </div>
+                <input
+                  type='text'
+                  className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
+                  placeholder='例如: https://proxy.example.com/bangumi/'
+                  value={bangumiProxyUrl}
+                  onChange={(e) => handleBangumiProxyUrlChange(e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Bangumi 图片代理设置 */}
+            <div className='space-y-3'>
+              <div>
+                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                  Bangumi 图片代理
+                </h4>
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                  选择获取 Bangumi 图片（封面、海报）的方式
+                </p>
+              </div>
+              <div className='relative' data-dropdown='bangumi-image-proxy'>
+                <button
+                  type='button'
+                  className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-left flex items-center justify-between bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-colors'
+                  onClick={() => setIsBangumiImageDropdownOpen(!isBangumiImageDropdownOpen)}
+                >
+                  <span>
+                    {bangumiImageProxyTypeOptions.find(
+                      (option) => option.value === bangumiImageProxyType
+                    )?.label || '服务器代理（默认）'}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 transition-transform ${
+                      isBangumiImageDropdownOpen ? 'rotate-180' : ''
+                    }`}
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                  >
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 9l-7 7-7-7' />
+                  </svg>
+                </button>
+                {isBangumiImageDropdownOpen && (
+                  <div className='absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto'>
+                    {bangumiImageProxyTypeOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type='button'
+                        className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                          bangumiImageProxyType === option.value &&
+                          'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                        }`}
+                        onClick={() => {
+                          handleBangumiImageProxyChange(option.value);
+                          setIsBangumiImageDropdownOpen(false);
+                        }}
+                      >
+                        {bangumiImageProxyType === option.value && (
+                          <span className='mr-2'>✓</span>
+                        )}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {bangumiImageProxyType === 'custom' && (
+                <input
+                  type='text'
+                  className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
+                  placeholder='例如: https://proxy.example.com/fetch?url='
+                  value={bangumiImageProxyUrl}
+                  onChange={(e) => handleBangumiImageProxyUrlChange(e.target.value)}
+                />
+              )}
+              {getThanksInfo(bangumiImageProxyType) && (
+                <p className='text-xs text-blue-500 dark:text-blue-400'>
+                  <a
+                    href={getThanksInfo(bangumiImageProxyType)!.url}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                  >
+                    {getThanksInfo(bangumiImageProxyType)!.text}
+                  </a>
+                </p>
+              )}
+            </div>
 
             {/* 默认聚合搜索结果 */}
             <div className='flex items-center justify-between'>

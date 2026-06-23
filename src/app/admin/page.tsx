@@ -267,6 +267,11 @@ interface SiteConfig {
   DoubanImageProxy: string;
   BangumiProxyType: string;
   BangumiProxy: string;
+  BangumiImageProxyType: string;
+  BangumiImageProxy: string;
+  ServerHttpProxy: string;
+  DanmuApiUrl: string;
+  DanmuApiToken: string;
   DisableYellowFilter: boolean;
   FluidSearch: boolean;
 }
@@ -3395,6 +3400,11 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     DoubanImageProxy: '',
 BangumiProxyType: 'direct',
 BangumiProxy: '',
+    BangumiImageProxyType: 'server',
+    BangumiImageProxy: '',
+    ServerHttpProxy: '',
+    DanmuApiUrl: '',
+    DanmuApiToken: '',
     DisableYellowFilter: false,
     FluidSearch: true,
   });
@@ -3402,6 +3412,7 @@ BangumiProxy: '',
   // 豆瓣数据源相关状态
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
   const [isBangumiProxyDropdownOpen, setIsBangumiProxyDropdownOpen] = useState(false);
+  const [isBangumiImageProxyDropdownOpen, setIsBangumiImageProxyDropdownOpen] = useState(false);
 const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
     useState(false);
 
@@ -3414,10 +3425,11 @@ const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
       label: '豆瓣 CDN By CMLiussss（腾讯云）',
     },
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
+    { value: 'cmliussss-unified', label: 'CDN By CMLiussss（统一域名）' },
     { value: 'custom', label: '自定义代理' },
   ];
 
-// 番剧数据代理选项
+// Bangumi 数据代理选项
 const bangumiDataSourceOptions = [
   { value: 'direct', label: '直连（服务器直接请求 Bangumi）' },
   { value: 'cmliussss-cdn-tencent', label: 'Bangumi CDN By CMLiussss（腾讯云）' },
@@ -3426,6 +3438,14 @@ const bangumiDataSourceOptions = [
   { value: 'cors-anywhere', label: 'Cors Anywhere' },
   { value: 'custom', label: '自定义代理' },
 ];
+
+  // Bangumi 图片代理选项
+  const bangumiImageProxyTypeOptions = [
+    { value: 'server', label: '服务器代理（默认）' },
+    { value: 'cmliussss', label: 'Bangumi 图片 CDN By CMLiussss' },
+    { value: 'direct', label: '直连（浏览器直接请求 Bangumi 图片）' },
+    { value: 'custom', label: '自定义代理' },
+  ];
 
   // 豆瓣图片代理选项
   const doubanImageProxyTypeOptions = [
@@ -3437,6 +3457,7 @@ const bangumiDataSourceOptions = [
       label: '豆瓣 CDN By CMLiussss（腾讯云）',
     },
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
+    { value: 'baidu', label: '百度图片代理' },
     { value: 'custom', label: '自定义代理' },
   ];
 
@@ -3470,6 +3491,11 @@ const bangumiDataSourceOptions = [
         DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
 BangumiProxyType: config.SiteConfig.BangumiProxyType || 'direct',
 BangumiProxy: config.SiteConfig.BangumiProxy || '',
+BangumiImageProxyType: config.SiteConfig.BangumiImageProxyType || 'server',
+BangumiImageProxy: config.SiteConfig.BangumiImageProxy || '',
+        ServerHttpProxy: config.SiteConfig.ServerHttpProxy || '',
+        DanmuApiUrl: config.SiteConfig.DanmuApiUrl || '',
+        DanmuApiToken: config.SiteConfig.DanmuApiToken || '',
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
         FluidSearch: config.SiteConfig.FluidSearch || true,
       });
@@ -3528,6 +3554,23 @@ BangumiProxy: config.SiteConfig.BangumiProxy || '',
     }
   }, [isBangumiProxyDropdownOpen]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isBangumiImageProxyDropdownOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown="bangumi-image-proxy"]')) {
+          setIsBangumiImageProxyDropdownOpen(false);
+        }
+      }
+    };
+
+    if (isBangumiImageProxyDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () =>
+        document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isBangumiImageProxyDropdownOpen]);
+
   // 处理豆瓣数据源变化
   const handleDoubanDataSourceChange = (value: string) => {
     setSiteSettings((prev) => ({
@@ -3548,6 +3591,13 @@ BangumiProxy: config.SiteConfig.BangumiProxy || '',
     setSiteSettings((prev) => ({
       ...prev,
       BangumiProxyType: value,
+    }));
+  };
+
+  const handleBangumiImageProxyChange = (value: string) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      BangumiImageProxyType: value,
     }));
   };
 
@@ -3842,10 +3892,10 @@ BangumiProxy: config.SiteConfig.BangumiProxy || '',
         )}
       </div>
 
-{/* 番剧数据代理设置 */}
+{/* Bangumi 数据代理设置 */}
 <div>
   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-    番剧数据代理
+    Bangumi 数据代理
   </label>
   <div className='relative' data-dropdown='bangumi-datasource'>
     <button
@@ -3893,11 +3943,11 @@ BangumiProxy: config.SiteConfig.BangumiProxy || '',
     选择获取 Bangumi（番组计划）数据的方式，当服务器无法直连 api.bgm.tv 时需设置代理
   </p>
 </div>
-{/* 番剧代理地址设置 - 仅在选择自定义代理时显示 */}
+{/* Bangumi 代理地址设置 - 仅在选择自定义代理时显示 */}
 {siteSettings.BangumiProxyType === 'custom' && (
   <div>
     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-      番剧代理地址
+      Bangumi 数据代理
     </label>
     <input
       type='text'
@@ -3912,10 +3962,145 @@ BangumiProxy: config.SiteConfig.BangumiProxy || '',
       className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
     />
     <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-      自定义番剧数据代理服务器地址
+      自定义 Bangumi 数据代理服务器地址
     </p>
   </div>
 )}
+
+{/* Bangumi 图片代理设置 */}
+<div data-dropdown="bangumi-image-proxy">
+  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+    Bangumi 图片代理
+  </label>
+  <button
+    type='button'
+    className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-left flex items-center justify-between bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+    onClick={() => setIsBangumiImageProxyDropdownOpen(!isBangumiImageProxyDropdownOpen)}
+  >
+    <span>
+      {bangumiImageProxyTypeOptions.find(
+        (option) => option.value === siteSettings.BangumiImageProxyType
+      )?.label || '服务器代理（默认）'}
+    </span>
+    <svg
+      className={`w-4 h-4 transition-transform ${
+        isBangumiImageProxyDropdownOpen ? 'rotate-180' : ''
+      }`}
+      fill='none'
+      stroke='currentColor'
+      viewBox='0 0 24 24'
+    >
+      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 9l-7 7-7-7' />
+    </svg>
+  </button>
+  {isBangumiImageProxyDropdownOpen && (
+    <div className='absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg'>
+      {bangumiImageProxyTypeOptions.map((option) => (
+        <button
+          key={option.value}
+          type='button'
+          className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
+            siteSettings.BangumiImageProxyType === option.value &&
+            'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+          }`}
+          onClick={() => {
+            handleBangumiImageProxyChange(option.value);
+            setIsBangumiImageProxyDropdownOpen(false);
+          }}
+        >
+          {siteSettings.BangumiImageProxyType === option.value && (
+            <span className='mr-2'>✓</span>
+          )}
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )}
+  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+    选择获取 Bangumi 图片（封面、海报）的方式，lain.bgm.tv 在国内无法直接访问
+  </p>
+</div>
+{/* Bangumi 图片自定义代理地址 */}
+{siteSettings.BangumiImageProxyType === 'custom' && (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      Bangumi 图片自定义代理地址
+    </label>
+    <input
+      type='text'
+      placeholder='例如: https://proxy.example.com/fetch?url='
+      value={siteSettings.BangumiImageProxy}
+      onChange={(e) =>
+        setSiteSettings((prev) => ({
+          ...prev,
+          BangumiImageProxy: e.target.value,
+        }))
+      }
+      className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
+    />
+    <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+      自定义 Bangumi 图片代理地址，URL编码后的图片地址将追加在后面
+    </p>
+  </div>
+)}
+
+{/* 服务器端 HTTP 代理 */}
+<div>
+  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+    服务器端 HTTP 代理（海外部署）
+  </label>
+  <input
+    type='text'
+    placeholder='例如: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080'
+    value={siteSettings.ServerHttpProxy}
+    onChange={(e) =>
+      setSiteSettings((prev) => ({
+        ...prev,
+        ServerHttpProxy: e.target.value,
+      }))
+    }
+    className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
+  />
+  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+    海外部署时，服务器无法直连国内服务（B站、Bangumi、弹幕API等），设置 HTTP 代理后所有出站请求将通过代理发出。支持 HTTP/SOCKS5 代理。
+  </p>
+</div>
+{/* 弹幕API配置 */}
+<div>
+  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+    弹幕API（自部署Danmu API）
+  </label>
+  <div className='space-y-2'>
+    <input
+      type='text'
+      placeholder='弹幕API地址，例如: https://danmu.example.com'
+      value={siteSettings.DanmuApiUrl}
+      onChange={(e) =>
+        setSiteSettings((prev) => ({
+          ...prev,
+          DanmuApiUrl: e.target.value,
+        }))
+      }
+      className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
+    />
+    <input
+      type='password'
+      placeholder='弹幕API Token'
+      value={siteSettings.DanmuApiToken}
+      onChange={(e) =>
+        setSiteSettings((prev) => ({
+          ...prev,
+          DanmuApiToken: e.target.value,
+        }))
+      }
+      className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
+    />
+  </div>
+  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+    配置自部署的LogVar Danmu API地址和Token，可获取爱优腾芒哔咪人韩巴狐乐西埋帆等平台弹幕。也支持环境变量 DANMU_API_URL 和 DANMU_API_TOKEN。
+  </p>
+</div>
+
 
       {/* 搜索接口可拉取最大页数 */}
       <div>

@@ -16,6 +16,11 @@ export interface AdminConfig {
     DoubanImageProxy: string;
     BangumiProxyType: string;
     BangumiProxy: string;
+    BangumiImageProxyType: string;
+    BangumiImageProxy: string;
+    ServerHttpProxy: string;
+    DanmuApiUrl: string;
+    DanmuApiToken: string;
     DisableYellowFilter: boolean;
     FluidSearch: boolean;
   };

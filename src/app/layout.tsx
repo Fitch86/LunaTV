@@ -54,6 +54,10 @@ export default async function RootLayout({
   let doubanImageProxy = process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '';
 let bangumiProxyType = process.env.NEXT_PUBLIC_BANGUMI_PROXY_TYPE || 'direct';
 let bangumiProxy = process.env.NEXT_PUBLIC_BANGUMI_PROXY || '';
+let bangumiImageProxyType = process.env.NEXT_PUBLIC_BANGUMI_IMAGE_PROXY_TYPE || 'server';
+let bangumiImageProxy = process.env.NEXT_PUBLIC_BANGUMI_IMAGE_PROXY || '';
+  let danmuApiUrl = process.env.DANMU_API_URL || '';
+  let danmuApiToken = process.env.DANMU_API_TOKEN || '';
   let disableYellowFilter =
     process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true';
   let fluidSearch = process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false';
@@ -73,6 +77,10 @@ let bangumiProxy = process.env.NEXT_PUBLIC_BANGUMI_PROXY || '';
     doubanImageProxy = config.SiteConfig.DoubanImageProxy;
 bangumiProxyType = config.SiteConfig.BangumiProxyType || 'direct';
 bangumiProxy = config.SiteConfig.BangumiProxy || '';
+bangumiImageProxyType = config.SiteConfig.BangumiImageProxyType || 'server';
+bangumiImageProxy = config.SiteConfig.BangumiImageProxy || '';
+    danmuApiUrl = config.SiteConfig.DanmuApiUrl || '';
+    danmuApiToken = config.SiteConfig.DanmuApiToken || '';
     disableYellowFilter = config.SiteConfig.DisableYellowFilter;
     customCategories = config.CustomCategories.filter(
       (category) => !category.disabled
@@ -93,6 +101,10 @@ bangumiProxy = config.SiteConfig.BangumiProxy || '';
     DOUBAN_IMAGE_PROXY: doubanImageProxy,
 BANGUMI_PROXY_TYPE: bangumiProxyType,
 BANGUMI_PROXY: bangumiProxy,
+BANGUMI_IMAGE_PROXY_TYPE: bangumiImageProxyType,
+BANGUMI_IMAGE_PROXY: bangumiImageProxy,
+    DANMU_API_URL: danmuApiUrl,
+    DANMU_API_TOKEN: danmuApiToken,
     DISABLE_YELLOW_FILTER: disableYellowFilter,
     CUSTOM_CATEGORIES: customCategories,
     FLUID_SEARCH: fluidSearch,

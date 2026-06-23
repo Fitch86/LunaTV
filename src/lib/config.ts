@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 
 import { AdminConfig } from './admin.types';
+import { syncServerProxyFromConfig } from './fetch-with-proxy';
 
 export interface ApiSite {
   key: string;
@@ -216,6 +217,14 @@ async function getInitConfig(configFile: string, subConfig: {
       DoubanImageProxy: process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '',
 BangumiProxyType: process.env.NEXT_PUBLIC_BANGUMI_PROXY_TYPE || 'direct',
 BangumiProxy: process.env.NEXT_PUBLIC_BANGUMI_PROXY || '',
+BangumiImageProxyType: process.env.NEXT_PUBLIC_BANGUMI_IMAGE_PROXY_TYPE || 'server',
+BangumiImageProxy: process.env.NEXT_PUBLIC_BANGUMI_IMAGE_PROXY || '',
+      ServerHttpProxy:
+        process.env.NEXT_PUBLIC_SERVER_HTTP_PROXY || process.env.SERVER_HTTP_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '',
+      DanmuApiUrl:
+        process.env.DANMU_API_URL || '',
+      DanmuApiToken:
+        process.env.DANMU_API_TOKEN || '',
       DisableYellowFilter:
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch:
@@ -312,6 +321,12 @@ export async function getConfig(): Promise<AdminConfig> {
   adminConfig = configSelfCheck(adminConfig);
   cachedConfig = adminConfig;
   db.saveAdminConfig(cachedConfig);
+
+  // 将数据库中的 ServerHttpProxy 同步到环境变量，使 fetchWithProxy 能使用
+  if (cachedConfig.SiteConfig?.ServerHttpProxy) {
+    syncServerProxyFromConfig(cachedConfig.SiteConfig.ServerHttpProxy);
+  }
+
   return cachedConfig;
 }
 

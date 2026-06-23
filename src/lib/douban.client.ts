@@ -98,6 +98,7 @@ function getDoubanProxyConfig(): {
   | 'cors-proxy-zwei'
   | 'cmliussss-cdn-tencent'
   | 'cmliussss-cdn-ali'
+  | 'cmliussss-unified'
   | 'cors-anywhere'
   | 'custom';
   proxyUrl: string;
@@ -123,7 +124,8 @@ export async function fetchDoubanCategories(
   params: DoubanCategoriesParams,
   proxyUrl: string,
   useTencentCDN = false,
-  useAliCDN = false
+  useAliCDN = false,
+  useUnified = false
 ): Promise<DoubanResult> {
   const { kind, category, type, pageLimit = 20, pageStart = 0 } = params;
 
@@ -144,7 +146,9 @@ export async function fetchDoubanCategories(
     throw new Error('pageStart 不能小于 0');
   }
 
-  const target = useTencentCDN
+  const target = useUnified
+    ? `https://img.doubanio.cmliussss.net/rexxar/api/v2/subject/recent_hot/${kind}?start=${pageStart}&limit=${pageLimit}&category=${category}&type=${type}`
+    : useTencentCDN
     ? `https://m.douban.cmliussss.net/rexxar/api/v2/subject/recent_hot/${kind}?start=${pageStart}&limit=${pageLimit}&category=${category}&type=${type}`
     : useAliCDN
       ? `https://m.douban.cmliussss.com/rexxar/api/v2/subject/recent_hot/${kind}?start=${pageStart}&limit=${pageLimit}&category=${category}&type=${type}`
@@ -153,7 +157,7 @@ export async function fetchDoubanCategories(
   try {
     const response = await fetchWithTimeout(
       target,
-      useTencentCDN || useAliCDN ? '' : proxyUrl
+      useUnified || useTencentCDN || useAliCDN ? '' : proxyUrl
     );
 
     if (!response.ok) {
@@ -212,9 +216,11 @@ export async function getDoubanCategories(
       case 'cors-proxy-zwei':
         return await fetchDoubanCategories(params, 'https://ciao-cors.is-an.org/');
       case 'cmliussss-cdn-tencent':
-        return await fetchDoubanCategories(params, '', true, false);
+        return await fetchDoubanCategories(params, '', true, false, false);
       case 'cmliussss-cdn-ali':
-        return await fetchDoubanCategories(params, '', false, true);
+        return await fetchDoubanCategories(params, '', false, true, false);
+      case 'cmliussss-unified':
+        return await fetchDoubanCategories(params, '', false, false, true);
       case 'cors-anywhere':
         return await fetchDoubanCategories(params, 'https://cors-anywhere.com/');
       case 'custom':
@@ -255,9 +261,11 @@ export async function getDoubanList(
       case 'cors-proxy-zwei':
         return await fetchDoubanList(params, 'https://ciao-cors.is-an.org/');
       case 'cmliussss-cdn-tencent':
-        return await fetchDoubanList(params, '', true, false);
+        return await fetchDoubanList(params, '', true, false, false);
       case 'cmliussss-cdn-ali':
-        return await fetchDoubanList(params, '', false, true);
+        return await fetchDoubanList(params, '', false, true, false);
+      case 'cmliussss-unified':
+        return await fetchDoubanList(params, '', false, false, true);
       case 'cors-anywhere':
         return await fetchDoubanList(params, 'https://cors-anywhere.com/');
       case 'custom':
@@ -275,7 +283,8 @@ export async function fetchDoubanList(
   params: DoubanListParams,
   proxyUrl: string,
   useTencentCDN = false,
-  useAliCDN = false
+  useAliCDN = false,
+  useUnified = false
 ): Promise<DoubanResult> {
   const { tag, type, pageLimit = 20, pageStart = 0 } = params;
 
@@ -296,7 +305,9 @@ export async function fetchDoubanList(
     throw new Error('pageStart 不能小于 0');
   }
 
-  const target = useTencentCDN
+  const target = useUnified
+    ? `https://img.doubanio.cmliussss.net/j/search_subjects?type=${type}&tag=${tag}&sort=recommend&page_limit=${pageLimit}&page_start=${pageStart}`
+    : useTencentCDN
     ? `https://movie.douban.cmliussss.net/j/search_subjects?type=${type}&tag=${tag}&sort=recommend&page_limit=${pageLimit}&page_start=${pageStart}`
     : useAliCDN
       ? `https://movie.douban.cmliussss.com/j/search_subjects?type=${type}&tag=${tag}&sort=recommend&page_limit=${pageLimit}&page_start=${pageStart}`
@@ -305,7 +316,7 @@ export async function fetchDoubanList(
   try {
     const response = await fetchWithTimeout(
       target,
-      useTencentCDN || useAliCDN ? '' : proxyUrl
+      useUnified || useTencentCDN || useAliCDN ? '' : proxyUrl
     );
 
     if (!response.ok) {
@@ -431,6 +442,8 @@ export async function getDoubanRecommends(
         return await fetchDoubanRecommends(params, '', true, false);
       case 'cmliussss-cdn-ali':
         return await fetchDoubanRecommends(params, '', false, true);
+      case 'cmliussss-unified':
+        return await fetchDoubanRecommends(params, '', false, false, true);
       case 'cors-anywhere':
         return await fetchDoubanRecommends(params, 'https://cors-anywhere.com/');
       case 'custom':
@@ -448,7 +461,8 @@ async function fetchDoubanRecommends(
   params: DoubanRecommendsParams,
   proxyUrl: string,
   useTencentCDN = false,
-  useAliCDN = false
+  useAliCDN = false,
+  useUnified = false
 ): Promise<DoubanResult> {
   const { kind, pageLimit = 20, pageStart = 0 } = params;
   let { category, format, region, year, platform, sort, label } = params;
@@ -502,7 +516,9 @@ async function fetchDoubanRecommends(
     tags.push(platform);
   }
 
-  const baseUrl = useTencentCDN
+  const baseUrl = useUnified
+    ? `https://img.doubanio.cmliussss.net/rexxar/api/v2/${kind}/recommend`
+    : useTencentCDN
     ? `https://m.douban.cmliussss.net/rexxar/api/v2/${kind}/recommend`
     : useAliCDN
       ? `https://m.douban.cmliussss.com/rexxar/api/v2/${kind}/recommend`
@@ -523,7 +539,7 @@ async function fetchDoubanRecommends(
   try {
     const response = await fetchWithTimeout(
       target,
-      useTencentCDN || useAliCDN ? '' : proxyUrl
+      useUnified || useTencentCDN || useAliCDN ? '' : proxyUrl
     );
 
     if (!response.ok) {
@@ -548,5 +564,36 @@ async function fetchDoubanRecommends(
     };
   } catch (error) {
     throw new Error(`获取豆瓣推荐数据失败: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * 轻量级豆瓣信息查询，通过服务器 quick-info API
+ */
+export async function fetchDoubanQuickInfo(id: string): Promise<{
+  code: number;
+  message?: string;
+  data?: {
+    id: string;
+    title: string;
+    year: string;
+    rate: string | null;
+    genres: string[];
+    directors: string[];
+    cast: string[];
+    plot_summary: string;
+  };
+}> {
+  try {
+    const response = await fetch(`/api/douban/quick-info?id=${id}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    return {
+      code: 500,
+      message: `获取豆瓣快速信息失败: ${(error as Error).message}`,
+    };
   }
 }

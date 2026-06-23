@@ -3,6 +3,8 @@
  * @param url 请求的URL
  * @returns Promise<T> 返回指定类型的数据
  */
+import { fetchWithProxy } from '@/lib/fetch-with-proxy';
+
 export async function fetchDoubanData<T>(url: string): Promise<T> {
   // 添加超时控制
   const controller = new AbortController();
@@ -21,7 +23,7 @@ export async function fetchDoubanData<T>(url: string): Promise<T> {
   };
 
   try {
-    const response = await fetch(url, fetchOptions);
+    const response = await fetchWithProxy(url, fetchOptions);
     clearTimeout(timeoutId);
 
     if (!response.ok) {

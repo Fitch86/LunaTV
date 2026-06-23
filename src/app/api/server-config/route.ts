@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
     SiteName: config.SiteConfig.SiteName,
     StorageType: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
     Version: CURRENT_VERSION,
+    ServerHttpProxy: config.SiteConfig.ServerHttpProxy || '',
+    DanmuApiUrl: config.SiteConfig.DanmuApiUrl || '',
+    DanmuApiToken: config.SiteConfig.DanmuApiToken || '',
   };
   return NextResponse.json(result);
 }

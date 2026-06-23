@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { fetchWithProxy } from '@/lib/fetch-with-proxy';
+
 export const runtime = 'nodejs';
 
 /**
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
 
     let imageResponse: Response;
     try {
-      imageResponse = await fetch(imageUrl, {
+      imageResponse = await fetchWithProxy(imageUrl, {
         signal: controller.signal,
         headers: {
           Referer: referer,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
+import { fetchWithProxy } from '@/lib/fetch-with-proxy';
 import { fetchDoubanData } from '@/lib/douban';
 import { DoubanItem, DoubanResult } from '@/lib/types';
 
@@ -113,7 +114,7 @@ function handleTop250(pageStart: number) {
     },
   };
 
-  return fetch(target, fetchOptions)
+  return fetchWithProxy(target, fetchOptions)
     .then(async (fetchResponse) => {
       clearTimeout(timeoutId);
 

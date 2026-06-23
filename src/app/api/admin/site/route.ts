@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { updateServerProxy } from '@/lib/fetch-with-proxy';
 
 export const runtime = 'nodejs';
 
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy,
       BangumiProxyType,
       BangumiProxy,
+      BangumiImageProxyType,
+      BangumiImageProxy,
+      ServerHttpProxy,
+      DanmuApiUrl,
+      DanmuApiToken,
       DisableYellowFilter,
       FluidSearch,
     } = body as {
@@ -52,6 +58,11 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy: string;
       BangumiProxyType: string;
       BangumiProxy: string;
+      BangumiImageProxyType: string;
+      BangumiImageProxy: string;
+      ServerHttpProxy: string;
+      DanmuApiUrl: string;
+      DanmuApiToken: string;
       DisableYellowFilter: boolean;
       FluidSearch: boolean;
     };
@@ -68,6 +79,11 @@ export async function POST(request: NextRequest) {
       typeof DoubanImageProxy !== 'string' ||
       typeof BangumiProxyType !== 'string' ||
       typeof BangumiProxy !== 'string' ||
+      typeof BangumiImageProxyType !== 'string' ||
+      typeof BangumiImageProxy !== 'string' ||
+      typeof ServerHttpProxy !== 'string' ||
+      typeof DanmuApiUrl !== 'string' ||
+      typeof DanmuApiToken !== 'string' ||
       typeof DisableYellowFilter !== 'boolean' ||
       typeof FluidSearch !== 'boolean'
     ) {
@@ -99,9 +115,17 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy,
       BangumiProxyType,
       BangumiProxy,
+      BangumiImageProxyType,
+      BangumiImageProxy,
+      ServerHttpProxy,
+      DanmuApiUrl,
+      DanmuApiToken,
       DisableYellowFilter,
       FluidSearch,
     };
+
+    // 实时更新服务器 HTTP 代理
+    updateServerProxy(ServerHttpProxy);
 
     // 写入数据库
     await db.saveAdminConfig(adminConfig);

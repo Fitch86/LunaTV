@@ -2,6 +2,26 @@
 import he from 'he';
 import Hls from 'hls.js';
 
+function getBangumiImageProxyConfig(): {
+  proxyType: 'server' | 'cmliussss' | 'custom' | 'direct';
+  proxyUrl: string;
+} {
+  let bangumiImageProxyType: 'server' | 'cmliussss' | 'custom' | 'direct' = 'server';
+  let bangumiImageProxyUrl = '';
+
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    const storedType = localStorage.getItem('bangumiImageProxyType');
+    const runtimeType = (window as any).RUNTIME_CONFIG?.BANGUMI_IMAGE_PROXY_TYPE;
+    bangumiImageProxyType = (storedType || runtimeType || 'server') as 'server' | 'cmliussss' | 'custom' | 'direct';
+    bangumiImageProxyUrl =
+      localStorage.getItem('bangumiImageProxyUrl') ||
+      (window as any).RUNTIME_CONFIG?.BANGUMI_IMAGE_PROXY ||
+      '';
+  }
+
+  return { proxyType: bangumiImageProxyType, proxyUrl: bangumiImageProxyUrl };
+}
+
 function getDoubanImageProxyConfig(): {
   proxyType:
   | 'direct'
@@ -9,17 +29,33 @@ function getDoubanImageProxyConfig(): {
   | 'img3'
   | 'cmliussss-cdn-tencent'
   | 'cmliussss-cdn-ali'
+  | 'baidu'
   | 'custom';
   proxyUrl: string;
 } {
-  const doubanImageProxyType =
-    localStorage.getItem('doubanImageProxyType') ||
-    (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-    'server';
-  const doubanImageProxy =
-    localStorage.getItem('doubanImageProxyUrl') ||
-    (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
-    '';
+  let doubanImageProxyType: 'direct' | 'server' | 'img3' | 'cmliussss-cdn-tencent' | 'cmliussss-cdn-ali' | 'baidu' | 'custom' = 'server';
+  let doubanImageProxy = '';
+
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    const storedType = localStorage.getItem('doubanImageProxyType');
+    const runtimeType = (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE;
+
+    // 自动修复：如果localStorage或RUNTIME_CONFIG是'direct'，自动改为'server'
+    let effectiveStoredType = storedType;
+    if (storedType === 'direct') {
+      effectiveStoredType = 'server';
+      localStorage.setItem('doubanImageProxyType', 'server');
+    }
+
+    const effectiveRuntimeType = (runtimeType === 'direct') ? 'server' : runtimeType;
+
+    doubanImageProxyType = (effectiveStoredType || effectiveRuntimeType || 'server') as 'direct' | 'server' | 'img3' | 'cmliussss-cdn-tencent' | 'cmliussss-cdn-ali' | 'baidu' | 'custom';
+    doubanImageProxy =
+      localStorage.getItem('doubanImageProxyUrl') ||
+      (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
+      '';
+  }
+
   return {
     proxyType: doubanImageProxyType,
     proxyUrl: doubanImageProxy,
@@ -32,20 +68,33 @@ function getDoubanImageProxyConfig(): {
 export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
-  // 豆瓣和 Bangumi 图片都需要代理处理
-  const isDoubanImage = originalUrl.includes('doubanio.com');
-  const isBangumiImage = originalUrl.includes('lain.bgm.tv') || originalUrl.includes('pic.bgm.tv');
-
-  if (!isDoubanImage && !isBangumiImage) {
-    return originalUrl;
-  }
-
-  // Bangumi 图片：走服务端代理（解决 ISP 封锁和 CORS 问题）
-  if (isBangumiImage) {
+  // 处理 manmankan 图片防盗链
+  if (originalUrl.includes('manmankan.com')) {
     return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
   }
 
-  // 豆瓣图片：根据配置选择代理方式
+  // Bangumi 图片代理（lain.bgm.tv / bgm.tv/pic 在国内无法直接访问）
+  if (originalUrl.includes('lain.bgm.tv') || originalUrl.includes('bgm.tv/pic')) {
+    const { proxyType: bangumiProxyType, proxyUrl: bangumiProxyUrl } = getBangumiImageProxyConfig();
+    switch (bangumiProxyType) {
+      case 'cmliussss':
+        return originalUrl.replace(/lain\.bgm\.tv/g, 'img.doubanio.cmliussss.net');
+      case 'custom':
+        if (bangumiProxyUrl) return `${bangumiProxyUrl}${encodeURIComponent(originalUrl)}`;
+        return `/api/proxy/logo?url=${encodeURIComponent(originalUrl)}`;
+      case 'direct':
+        return originalUrl;
+      case 'server':
+      default:
+        return `/api/proxy/logo?url=${encodeURIComponent(originalUrl)}`;
+    }
+  }
+
+  // 仅处理豆瓣图片代理
+  if (!originalUrl.includes('doubanio.com')) {
+    return originalUrl;
+  }
+
   const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
   switch (proxyType) {
     case 'server':
@@ -62,6 +111,8 @@ export function processImageUrl(originalUrl: string): string {
         /img\d+\.doubanio\.com/g,
         'img.doubanio.cmliussss.com'
       );
+    case 'baidu':
+      return `https://image.baidu.com/search/down?url=${encodeURIComponent(originalUrl)}`;
     case 'custom':
       return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
     case 'direct':

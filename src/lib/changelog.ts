@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2026.06.23.01",
+    date: "2026-06-23",
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+    "修正弹幕 API",
+    "修正番剧获取不到数据"
+    ]
+  },
+  {
     version: "2026.06.12.01",
     date: "2026-06-12",
     added: [

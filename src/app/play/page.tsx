@@ -177,20 +177,23 @@ const startDanmakuObserver = () => {
   const [videoYear, setVideoYear] = useState(searchParams.get('year') || '');
   const [videoCover, setVideoCover] = useState('');
 
-  // bangumi ID检测（3-6位数字）
+  // bangumi ID检测（3-6位数字，仅作为fallback）
   const isBangumiId = (id: number): boolean => {
     const length = id.toString().length;
     return id > 0 && length >= 3 && length <= 6;
   };
   
+  // 优先读取 bangumi_id URL 参数（由 VideoCard 的 isBangumi 传入）
+  const explicitBangumiId = parseInt(searchParams.get('bangumi_id') || '0') || 0;
   const idFromUrl = parseInt(searchParams.get('douban_id') || '0') || 0;
-  const isInitialIdBangumi = isBangumiId(idFromUrl);
+  // 如果有显式 bangumi_id 参数，直接使用；否则对 douban_id 做启发式检测
+  const isInitialIdBangumi = explicitBangumiId > 0 || isBangumiId(idFromUrl);
 
   const [bangumiSubjectId] = useState(
-    isInitialIdBangumi ? idFromUrl : 0
+    explicitBangumiId > 0 ? explicitBangumiId : (isInitialIdBangumi ? idFromUrl : 0)
   );
   const [videoDoubanId, setVideoDoubanId] = useState(
-    isInitialIdBangumi ? 0 : idFromUrl
+    explicitBangumiId > 0 ? 0 : (isInitialIdBangumi ? 0 : idFromUrl)
   );
 
   // 当前源和ID
@@ -1202,6 +1205,9 @@ const startDanmakuObserver = () => {
       
       if (currentVideoDoubanId && currentVideoDoubanId > 0) {
         params.append('douban_id', currentVideoDoubanId.toString());
+      }
+      if (bangumiSubjectId && bangumiSubjectId > 0) {
+        params.append('bangumi_id', bangumiSubjectId.toString());
       }
       if (currentVideoTitle) {
         params.append('title', currentVideoTitle);

@@ -223,8 +223,10 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   );
 
   const handleClick = useCallback(() => {
-    // 构建豆瓣ID参数
-    const doubanIdParam = actualDoubanId && actualDoubanId > 0 ? `&douban_id=${actualDoubanId}` : '';
+    // 构建 ID 参数：bangumi 使用 bangumi_id，其他使用 douban_id
+    const idParam = actualDoubanId && actualDoubanId > 0
+      ? (isBangumi ? `&bangumi_id=${actualDoubanId}` : `&douban_id=${actualDoubanId}`)
+      : '';
 
     if (origin === 'live' && actualSource && actualId) {
       // 直播内容跳转到直播页面
@@ -232,7 +234,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
       router.push(url);
     } else if (from === 'douban' || (isAggregate && !actualSource && !actualId)) {
       const url = `/play?title=${encodeURIComponent(actualTitle.trim())}${actualYear ? `&year=${actualYear}` : ''
-        }${doubanIdParam}${actualSearchType ? `&stype=${actualSearchType}` : ''}${isAggregate ? '&prefer=true' : ''}${actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''}`;
+        }${idParam}${actualSearchType ? `&stype=${actualSearchType}` : ''}${isAggregate ? '&prefer=true' : ''}${actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''}`;
       router.push(url);
     } else if (actualSource && actualId) {
       let url = `/play?source=${actualSource}&id=${actualId}&title=${encodeURIComponent(
@@ -258,19 +260,22 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     actualQuery,
     actualSearchType,
     actualDoubanId,
+    isBangumi,
   ]);
 
   // 新标签页播放处理函数
   const handlePlayInNewTab = useCallback(() => {
-    // 构建豆瓣ID参数
-    const doubanIdParam = actualDoubanId && actualDoubanId > 0 ? `&douban_id=${actualDoubanId}` : '';
+    // 构建 ID 参数：bangumi 使用 bangumi_id，其他使用 douban_id
+    const idParamNewTab = actualDoubanId && actualDoubanId > 0
+      ? (isBangumi ? `&bangumi_id=${actualDoubanId}` : `&douban_id=${actualDoubanId}`)
+      : '';
 
     if (origin === 'live' && actualSource && actualId) {
       // 直播内容跳转到直播页面
       const url = `/live?source=${actualSource.replace('live_', '')}&id=${actualId.replace('live_', '')}`;
       window.open(url, '_blank');
     } else if (from === 'douban' || (isAggregate && !actualSource && !actualId)) {
-      const url = `/play?title=${encodeURIComponent(actualTitle.trim())}${actualYear ? `&year=${actualYear}` : ''}${doubanIdParam}${actualSearchType ? `&stype=${actualSearchType}` : ''}${isAggregate ? '&prefer=true' : ''}${actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''}`;
+      const url = `/play?title=${encodeURIComponent(actualTitle.trim())}${actualYear ? `&year=${actualYear}` : ''}${idParamNewTab}${actualSearchType ? `&stype=${actualSearchType}` : ''}${isAggregate ? '&prefer=true' : ''}${actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''}`;
       window.open(url, '_blank');
     } else if (actualSource && actualId) {
       let url = `/play?source=${actualSource}&id=${actualId}&title=${encodeURIComponent(
@@ -294,6 +299,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     isAggregate,
     actualQuery,
     actualSearchType,
+    actualDoubanId,
+    isBangumi,
   ]);
 
   // 检查搜索结果的收藏状态
