@@ -62,10 +62,19 @@ async function withRetry<T>(
 }
 
 export class UpstashRedisStorage implements IStorage {
-  private client: Redis;
+  private _client: Redis | null = null;
+
+  private get client(): Redis {
+    if (!this._client) {
+      this._client = getUpstashRedisClient();
+    }
+    return this._client;
+  }
 
   constructor() {
-    this.client = getUpstashRedisClient();
+    // 延迟初始化：不在构造时创建 Redis 客户端
+    // 这样在其他 STORAGE_TYPE 模式下，即使 webpack 打包了此模块，
+    // 也不会因缺少 UPSTASH_URL/UPSTASH_TOKEN 环境变量而报错
   }
 
   // ---------- 播放记录 ----------

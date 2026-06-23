@@ -16,6 +16,7 @@ import {
   SkipConfig,
   UserPlayStat,
 } from './types';
+import { UpstashRedisStorage } from './upstash.db';
 
 // storage type 常量: 'localstorage' | 'redis' | 'upstash'，默认 'localstorage'
 const STORAGE_TYPE =
@@ -26,33 +27,13 @@ const STORAGE_TYPE =
     | 'kvrocks'
     | undefined) || 'localstorage';
 
-// 创建存储实例（同步，非 upstash 模式）
+// 创建存储实例
 function createStorage(): IStorage {
   switch (STORAGE_TYPE) {
     case 'redis':
       return new RedisStorage();
-    case 'kvrocks':
-      return new KvrocksStorage();
     case 'upstash':
-      // upstash 需要动态导入，不能同步创建
-      throw new Error('Upstash storage must be created via createStorageAsync()');
-    case 'localstorage':
-    default:
-      return null as unknown as IStorage;
-  }
-}
-
-// 异步创建存储实例（upstash 需要动态导入避免未配置时报错）
-async function createStorageAsync(): Promise<IStorage> {
-  switch (STORAGE_TYPE) {
-    case 'redis':
-      return new RedisStorage();
-    case 'upstash': {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore - 动态导入，避免非 upstash 模式下加载 @upstash/redis 模块
-      const { UpstashRedisStorage } = await import('./upstash.db' as string);
-      return new UpstashRedisStorage() as IStorage;
-    }
+      return new UpstashRedisStorage();
     case 'kvrocks':
       return new KvrocksStorage();
     case 'localstorage':
@@ -63,29 +44,12 @@ async function createStorageAsync(): Promise<IStorage> {
 
 // 单例存储实例
 let storageInstance: IStorage | null = null;
-let storageInitPromise: Promise<IStorage> | null = null;
 
 function getStorage(): IStorage {
   if (!storageInstance) {
     storageInstance = createStorage();
   }
   return storageInstance;
-}
-
-async function getStorageAsync(): Promise<IStorage> {
-  if (storageInstance) {
-    return storageInstance;
-  }
-  if (STORAGE_TYPE === 'upstash') {
-    if (!storageInitPromise) {
-      storageInitPromise = createStorageAsync().then((storage) => {
-        storageInstance = storage;
-        return storage;
-      });
-    }
-    return storageInitPromise;
-  }
-  return getStorage();
 }
 
 // 工具函数：生成存储key
@@ -98,21 +62,7 @@ export class DbManager {
   private storage: IStorage;
 
   constructor() {
-    if (STORAGE_TYPE === 'upstash') {
-      // upstash 模式需要异步初始化，这里先给一个占位，首次调用时异步创建
-      // 使用 Proxy 延迟初始化，确保 upstash 模块按需加载
-      const asyncInit = getStorageAsync();
-      this.storage = new Proxy({} as IStorage, {
-        get: (_target, prop, _receiver) => {
-          return async (...args: any[]) => {
-            const realStorage = await asyncInit;
-            return (realStorage as any)[prop](...args);
-          };
-        }
-      });
-    } else {
-      this.storage = getStorage();
-    }
+    this.storage = getStorage();
   }
 
   // 播放记录相关方法
