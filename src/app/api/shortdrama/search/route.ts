@@ -7,12 +7,13 @@ import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
 import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 // 默认短剧源
-const DEFAULT_SHORT_DRAMA_API = 'https://wwzy.tv/api.php/provide/vod';
+const DEFAULT_SHORT_DRAMA_API = 'https://tyyszyapi.com/api.php/provide/vod';
 
 // 从单个短剧源搜索数据
 async function searchFromSource(
@@ -29,7 +30,7 @@ async function searchFromSource(
       'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!listResponse.ok) {
@@ -62,7 +63,7 @@ async function searchFromSource(
       'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -110,8 +111,9 @@ async function searchShortDramasInternal(query: string, page = 1, size = 20) {
     );
 
     if (shortDramaSources.length === 0) {
-      console.log(`🔍 [SEARCH] 使用默认短剧源，搜索词：${query}`);
-      return await searchFromSource(DEFAULT_SHORT_DRAMA_API, query, page, size);
+      const baseUrl = config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API;
+      console.log(`🔍 [SEARCH] 使用短剧源：${baseUrl}，搜索词：${query}`);
+      return await searchFromSource(baseUrl, query, page, size);
     }
 
     console.log(`🔍 [SEARCH] 从 ${shortDramaSources.length} 个短剧源聚合搜索`);
@@ -144,7 +146,8 @@ async function searchShortDramasInternal(query: string, page = 1, size = 20) {
   } catch (error) {
     console.error('搜索短剧失败:', error);
     try {
-      return await searchFromSource(DEFAULT_SHORT_DRAMA_API, query, page, size);
+      const config = await getConfig();
+      return await searchFromSource(config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API, query, page, size);
     } catch (fallbackError) {
       console.error('默认源也失败:', fallbackError);
       return { list: [], hasMore: false };

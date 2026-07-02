@@ -15,7 +15,9 @@
  */
 
 import { getAuthInfoFromBrowserCookie } from './auth';
-import { SkipConfig } from './types';
+import { EpisodeSkipConfig, SkipConfig } from './types';
+
+export type { EpisodeSkipConfig, SkipSegment } from './types';
 
 // 全局错误触发函数
 function triggerGlobalError(message: string) {
@@ -66,7 +68,7 @@ interface UserCacheStore {
   playRecords?: CacheData<Record<string, PlayRecord>>;
   favorites?: CacheData<Record<string, Favorite>>;
   searchHistory?: CacheData<string[]>;
-  skipConfigs?: CacheData<Record<string, SkipConfig>>;
+  skipConfigs?: CacheData<Record<string, EpisodeSkipConfig>>;
 }
 
 // ---- 常量 ----
@@ -315,7 +317,7 @@ class HybridCacheManager {
   /**
    * 获取缓存的跳过片头片尾配置
    */
-  getCachedSkipConfigs(): Record<string, SkipConfig> | null {
+  getCachedSkipConfigs(): Record<string, EpisodeSkipConfig> | null {
     const username = this.getCurrentUsername();
     if (!username) return null;
 
@@ -332,7 +334,7 @@ class HybridCacheManager {
   /**
    * 缓存跳过片头片尾配置
    */
-  cacheSkipConfigs(data: Record<string, SkipConfig>): void {
+  cacheSkipConfigs(data: Record<string, EpisodeSkipConfig>): void {
     const username = this.getCurrentUsername();
     if (!username) return;
 
@@ -1260,7 +1262,7 @@ export async function refreshAllCache(): Promise<void> {
         fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`),
         fetchFromApi<Record<string, Favorite>>(`/api/favorites`),
         fetchFromApi<string[]>(`/api/searchhistory`),
-        fetchFromApi<Record<string, SkipConfig>>(`/api/skipconfigs`),
+        fetchFromApi<Record<string, EpisodeSkipConfig>>(`/api/skipconfigs`),
       ]);
 
     if (playRecords.status === 'fulfilled') {
@@ -1400,14 +1402,30 @@ export async function preloadUserData(): Promise<void> {
 
 // ---------------- 跳过片头片尾配置相关 API ----------------
 
+export function getVideoSkipConfigKey(params: {
+  title: string;
+  doubanId?: number;
+  year?: string;
+}): string | undefined {
+  const { title, doubanId, year } = params;
+  if (doubanId && doubanId > 0) {
+    return `douban:${doubanId}`;
+  }
+  if (title && year) {
+    return `title:${title}:${year}`;
+  }
+  return undefined;
+}
+
 /**
  * 获取跳过片头片尾配置。
  * 数据库存储模式下使用混合缓存策略：优先返回缓存数据，后台异步同步最新数据。
  */
 export async function getSkipConfig(
   source: string,
-  id: string
-): Promise<SkipConfig | null> {
+  id: string,
+  identityKey?: string
+): Promise<EpisodeSkipConfig | null> {
   // 服务器端渲染阶段直接返回空
   if (typeof window === 'undefined') {
     return null;
@@ -1422,7 +1440,7 @@ export async function getSkipConfig(
 
     if (cachedData) {
       // 返回缓存数据，同时后台异步更新
-      fetchFromApi<Record<string, SkipConfig>>(`/api/skipconfigs`)
+      fetchFromApi<Record<string, EpisodeSkipConfig>>(`/api/skipconfigs`)
         .then((freshData) => {
           // 只有数据真正不同时才更新缓存
           if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
@@ -1443,7 +1461,7 @@ export async function getSkipConfig(
     } else {
       // 缓存为空，直接从 API 获取并缓存
       try {
-        const freshData = await fetchFromApi<Record<string, SkipConfig>>(
+        const freshData = await fetchFromApi<Record<string, EpisodeSkipConfig>>(
           `/api/skipconfigs`
         );
         cacheManager.cacheSkipConfigs(freshData);
@@ -1460,7 +1478,7 @@ export async function getSkipConfig(
   try {
     const raw = localStorage.getItem('moontv_skip_configs');
     if (!raw) return null;
-    const configs = JSON.parse(raw) as Record<string, SkipConfig>;
+    const configs = JSON.parse(raw) as Record<string, EpisodeSkipConfig>;
     return configs[key] || null;
   } catch (err) {
     console.error('读取跳过片头片尾配置失败:', err);
@@ -1476,7 +1494,8 @@ export async function getSkipConfig(
 export async function saveSkipConfig(
   source: string,
   id: string,
-  config: SkipConfig
+  config: EpisodeSkipConfig,
+  identityKey?: string
 ): Promise<void> {
   const key = generateStorageKey(source, id);
 
@@ -1501,7 +1520,7 @@ export async function saveSkipConfig(
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ key, config }),
+        body: JSON.stringify({ key, config, identityKey }),
       });
     } catch (err) {
       console.error('保存跳过片头片尾配置失败:', err);
@@ -1518,7 +1537,7 @@ export async function saveSkipConfig(
 
   try {
     const raw = localStorage.getItem('moontv_skip_configs');
-    const configs = raw ? (JSON.parse(raw) as Record<string, SkipConfig>) : {};
+    const configs = raw ? (JSON.parse(raw) as Record<string, EpisodeSkipConfig>) : {};
     configs[key] = config;
     localStorage.setItem('moontv_skip_configs', JSON.stringify(configs));
     window.dispatchEvent(
@@ -1537,7 +1556,7 @@ export async function saveSkipConfig(
  * 获取所有跳过片头片尾配置。
  * 数据库存储模式下使用混合缓存策略：优先返回缓存数据，后台异步同步最新数据。
  */
-export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
+export async function getAllSkipConfigs(): Promise<Record<string, EpisodeSkipConfig>> {
   // 服务器端渲染阶段直接返回空
   if (typeof window === 'undefined') {
     return {};
@@ -1550,7 +1569,7 @@ export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
 
     if (cachedData) {
       // 返回缓存数据，同时后台异步更新
-      fetchFromApi<Record<string, SkipConfig>>(`/api/skipconfigs`)
+      fetchFromApi<Record<string, EpisodeSkipConfig>>(`/api/skipconfigs`)
         .then((freshData) => {
           // 只有数据真正不同时才更新缓存
           if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
@@ -1572,7 +1591,7 @@ export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
     } else {
       // 缓存为空，直接从 API 获取并缓存
       try {
-        const freshData = await fetchFromApi<Record<string, SkipConfig>>(
+        const freshData = await fetchFromApi<Record<string, EpisodeSkipConfig>>(
           `/api/skipconfigs`
         );
         cacheManager.cacheSkipConfigs(freshData);
@@ -1589,7 +1608,7 @@ export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
   try {
     const raw = localStorage.getItem('moontv_skip_configs');
     if (!raw) return {};
-    return JSON.parse(raw) as Record<string, SkipConfig>;
+    return JSON.parse(raw) as Record<string, EpisodeSkipConfig>;
   } catch (err) {
     console.error('读取跳过片头片尾配置失败:', err);
     triggerGlobalError('读取跳过片头片尾配置失败');
@@ -1603,7 +1622,8 @@ export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
  */
 export async function deleteSkipConfig(
   source: string,
-  id: string
+  id: string,
+  identityKey?: string
 ): Promise<void> {
   const key = generateStorageKey(source, id);
 

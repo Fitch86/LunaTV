@@ -5,9 +5,9 @@ import { getRandomUserAgent } from '@/lib/user-agent';
 import { fetchWithProxy, getActiveProxyUrl } from '@/lib/fetch-with-proxy';
 import { getConfig } from '@/lib/config';
 
-// 默认弹幕API配置 (LogVar Danmu API 兼容)
-const DEFAULT_DANMU_API_URL = '';
-const DEFAULT_DANMU_API_TOKEN = '';
+// 默认弹幕API配置 (公共弹幕服务)
+const DEFAULT_DANMU_API_URL = 'https://smonedanmu.vercel.app';
+const DEFAULT_DANMU_API_TOKEN = 'smonetv';
 
 interface PlatformUrl {
   platform: string;
@@ -29,32 +29,62 @@ interface DanmuItem {
 }
 
 // 弹幕API配置接口
-interface DanmuApiConfig {
+interface DanmuApiCfg {
   enabled: boolean;
   apiUrl: string;
   token: string;
   timeout: number;
 }
 
-// 获取弹幕API配置（从数据库配置和环境变量）
-async function getDanmuApiConfig(): Promise<DanmuApiConfig> {
+// 获取弹幕API配置（优先数据库 DanmuApiConfig，fallback到环境变量，最后用默认公共API）
+async function getDanmuApiConfig(): Promise<DanmuApiCfg> {
   try {
     const config = await getConfig();
+
+    // 优先使用数据库中的 DanmuApiConfig
+    if (config.DanmuApiConfig) {
+      const dmCfg = config.DanmuApiConfig;
+
+      // 弹幕功能关闭
+      if (!dmCfg.enabled) {
+        return { enabled: false, apiUrl: '', token: '', timeout: 30 };
+      }
+
+      // 使用自定义API
+      if (dmCfg.useCustomApi && dmCfg.customApiUrl) {
+        return {
+          enabled: true,
+          apiUrl: dmCfg.customApiUrl.replace(/\/$/, ''),
+          token: dmCfg.customToken || '',
+          timeout: dmCfg.timeout || 30,
+        };
+      }
+
+      // 使用默认公共API
+      return {
+        enabled: true,
+        apiUrl: DEFAULT_DANMU_API_URL,
+        token: DEFAULT_DANMU_API_TOKEN,
+        timeout: dmCfg.timeout || 30,
+      };
+    }
+
+    // fallback: 从 SiteConfig 或环境变量读取（兼容旧配置）
     const apiUrl = config.SiteConfig?.DanmuApiUrl || process.env.DANMU_API_URL || DEFAULT_DANMU_API_URL;
     const token = config.SiteConfig?.DanmuApiToken || process.env.DANMU_API_TOKEN || DEFAULT_DANMU_API_TOKEN;
     return {
       enabled: !!apiUrl,
       apiUrl,
       token,
-      timeout: 10,
+      timeout: 30,
     };
   } catch {
-    // fallback到环境变量
+    // fallback到环境变量或默认公共API
     return {
-      enabled: !!(process.env.DANMU_API_URL || DEFAULT_DANMU_API_URL),
+      enabled: true,
       apiUrl: process.env.DANMU_API_URL || DEFAULT_DANMU_API_URL,
       token: process.env.DANMU_API_TOKEN || DEFAULT_DANMU_API_TOKEN,
-      timeout: 10,
+      timeout: 30,
     };
   }
 }

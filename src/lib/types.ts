@@ -205,6 +205,25 @@ export interface SkipConfig {
   outro_time: number; // 片尾时间（秒）
 }
 
+export interface SkipSegment {
+  start: number; // 开始时间（秒）
+  end: number; // 结束时间（秒）
+  type: 'opening' | 'ending'; // 片头或片尾
+  title?: string;
+  autoSkip?: boolean;
+  autoNextEpisode?: boolean;
+  mode?: 'absolute' | 'remaining';
+  remainingTime?: number;
+}
+
+export interface EpisodeSkipConfig {
+  source: string;
+  id: string;
+  title: string;
+  segments: SkipSegment[];
+  updated_time: number;
+}
+
 // 用户播放统计数据结构
 export interface UserPlayStat {
   username: string; // 用户名

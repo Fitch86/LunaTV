@@ -2,10 +2,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
+import { getCacheTime, getConfig } from '@/lib/config';
 import { parseShortDramaEpisode } from '@/lib/shortdrama.client';
 
 // 标记为动态路由
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
@@ -31,8 +32,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 从管理配置读取备用API
+    const config = await getConfig();
+    const alternativeApiUrl = config.ShortDramaConfig?.enableAlternative
+      ? config.ShortDramaConfig.alternativeApiUrl
+      : undefined;
+
     // 解析视频，默认使用代理
-    const result = await parseShortDramaEpisode(videoId, episodeNum, true);
+    const result = await parseShortDramaEpisode(videoId, episodeNum, true, alternativeApiUrl);
 
     if (result.code !== 0) {
       return NextResponse.json(

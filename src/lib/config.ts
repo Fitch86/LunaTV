@@ -230,12 +230,24 @@ BangumiImageProxy: process.env.NEXT_PUBLIC_BANGUMI_IMAGE_PROXY || '',
       FluidSearch:
         process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
     },
+    DanmuApiConfig: {
+      enabled: true,
+      useCustomApi: false,
+      customApiUrl: '',
+      customToken: '',
+      timeout: 30,
+    },
     UserConfig: {
       Users: [],
     },
     SourceConfig: [],
     CustomCategories: [],
     LiveConfig: [],
+    ShortDramaConfig: {
+      primaryApiUrl: '',
+      alternativeApiUrl: '',
+      enableAlternative: false,
+    },
   };
 
   // 补充用户信息
@@ -266,7 +278,7 @@ BangumiImageProxy: process.env.NEXT_PUBLIC_BANGUMI_IMAGE_PROXY || '',
       detail: site.detail,
       from: 'config',
       disabled: false,
-    });
+    } as any); // ponytail: cast to any for `type` field added later
   });
 
   // 从配置文件中补充自定义分类信息

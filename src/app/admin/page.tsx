@@ -32,6 +32,7 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  MessageSquare,
   Settings,
   Tv,
   Users,
@@ -45,6 +46,8 @@ import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
 import DataMigration from '@/components/DataMigration';
+import DanmuApiConfig from '@/components/DanmuApiConfig';
+import ShortDramaConfig from '@/components/ShortDramaConfig';
 import PageLayout from '@/components/PageLayout';
 
 // 统一按钮样式系统
@@ -4813,6 +4816,8 @@ function AdminPageClient() {
     liveSource: false,
     siteConfig: false,
     categoryConfig: false,
+    danmuApi: false,
+    shortDrama: false,
     configFile: false,
     dataMigration: false,
   });
@@ -5013,6 +5018,30 @@ function AdminPageClient() {
               onToggle={() => toggleTab('categoryConfig')}
             >
               <CategoryConfig config={config} refreshConfig={fetchConfig} />
+            </CollapsibleTab>
+
+            {/* 弹幕API配置标签 */}
+            <CollapsibleTab
+              title='弹幕API配置'
+              icon={
+                <MessageSquare size={20} className='text-gray-600 dark:text-gray-400' />
+              }
+              isExpanded={expandedTabs.danmuApi}
+              onToggle={() => toggleTab('danmuApi')}
+            >
+              <DanmuApiConfig config={config} refreshConfig={fetchConfig} />
+            </CollapsibleTab>
+
+            {/* 短剧API配置标签 */}
+            <CollapsibleTab
+              title='短剧API配置'
+              icon={
+                <Video size={20} className='text-gray-600 dark:text-gray-400' />
+              }
+              isExpanded={expandedTabs.shortDrama}
+              onToggle={() => toggleTab('shortDrama')}
+            >
+              <ShortDramaConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
             {/* 数据迁移标签 - 仅站长可见 */}

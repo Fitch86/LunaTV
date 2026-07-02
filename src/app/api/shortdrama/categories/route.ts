@@ -7,12 +7,13 @@ import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
 import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 // 默认短剧源
-const DEFAULT_SHORT_DRAMA_API = 'https://wwzy.tv/api.php/provide/vod';
+const DEFAULT_SHORT_DRAMA_API = 'https://tyyszyapi.com/api.php/provide/vod';
 
 // 从单个源获取短剧分类
 async function getCategoriesFromSource(
@@ -23,7 +24,7 @@ async function getCategoriesFromSource(
       'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -65,8 +66,9 @@ async function getShortDramaCategoriesInternal() {
     );
 
     if (shortDramaSources.length === 0) {
-      console.log(`📋 [CATEGORIES] 使用默认短剧源：${DEFAULT_SHORT_DRAMA_API}`);
-      return await getCategoriesFromSource(DEFAULT_SHORT_DRAMA_API);
+      const baseUrl = config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API;
+      console.log(`📋 [CATEGORIES] 使用短剧源：${baseUrl}`);
+      return await getCategoriesFromSource(baseUrl);
     }
 
     console.log(`📋 [CATEGORIES] 从 ${shortDramaSources.length} 个短剧源聚合分类`);
@@ -92,7 +94,8 @@ async function getShortDramaCategoriesInternal() {
   } catch (error) {
     console.error('获取短剧分类失败:', error);
     try {
-      return await getCategoriesFromSource(DEFAULT_SHORT_DRAMA_API);
+      const config = await getConfig();
+      return await getCategoriesFromSource(config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API);
     } catch (fallbackError) {
       console.error('默认源也失败:', fallbackError);
       return [];

@@ -941,19 +941,21 @@ function getUpstashRedisClient(): Redis {
   let client: Redis | undefined = (global as any)[globalKey];
 
   if (!client) {
-    const upstashUrl = process.env.UPSTASH_URL;
-    const upstashToken = process.env.UPSTASH_TOKEN;
+    const upstashUrl = process.env.UPSTASH_URL || '';
+    const upstashToken = process.env.UPSTASH_TOKEN || '';
 
     if (!upstashUrl || !upstashToken) {
-      throw new Error(
-        'UPSTASH_URL and UPSTASH_TOKEN env variables must be set'
+      console.warn(
+        '⚠️ UPSTASH_URL or UPSTASH_TOKEN env variables not set. ' +
+        'Upstash Redis will not work until these are configured. ' +
+        'If you are using a different STORAGE_TYPE, this warning can be ignored.'
       );
     }
 
-    // 创建 Upstash Redis 客户端
+    // 创建 Upstash Redis 客户端（即使环境变量为空也创建，避免在非 upstash 模式下报错）
     client = new Redis({
-      url: upstashUrl,
-      token: upstashToken,
+      url: upstashUrl || 'https://placeholder.upstash.io',
+      token: upstashToken || 'placeholder',
       // 可选配置
       retry: {
         retries: 3,
@@ -962,7 +964,9 @@ function getUpstashRedisClient(): Redis {
       },
     });
 
-    console.log('Upstash Redis client created successfully');
+    if (upstashUrl && upstashToken) {
+      console.log('Upstash Redis client created successfully');
+    }
 
     (global as any)[globalKey] = client;
   }

@@ -13,9 +13,11 @@ import {
   deleteFavorite,
   deletePlayRecord,
   deleteSkipConfig,
+  EpisodeSkipConfig,
   generateStorageKey,
   getAllPlayRecords,
   getSkipConfig,
+  getVideoSkipConfigKey,
   isFavorited,
   saveFavorite,
   savePlayRecord,
@@ -29,6 +31,8 @@ import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import LiveLoadingIndicator from '@/components/LiveLoadingIndicator';
 import PageLayout from '@/components/PageLayout';
+import DanmuManualMatchModal, { DanmuManualSelection } from '@/components/DanmuManualMatchModal';
+import SkipController from '@/components/SkipController';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
 declare global {
@@ -91,7 +95,7 @@ function PlayPageClient() {
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
 
-  // 跳过片头片尾配置
+  // 跳过片头片尾配置（UI state，用于artplayer settings面板）
   const [skipConfig, setSkipConfig] = useState<{
     enable: boolean;
     intro_time: number;
@@ -135,6 +139,11 @@ function PlayPageClient() {
     }
     return true;
   });
+  const [isDanmuManualModalOpen, setIsDanmuManualModalOpen] = useState(false);
+  const [isSkipSettingMode, setIsSkipSettingMode] = useState(false);
+  const [currentPlayTime, setCurrentPlayTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const manualDanmuOverrideRef = useRef<{ episodeId: number } | null>(null);
 const externalDanmuEnabledRef = useRef(externalDanmuEnabled);
 const danmakuObserverRef = useRef<MutationObserver | null>(null);
 useEffect(() => {
@@ -1020,10 +1029,25 @@ const startDanmakuObserver = () => {
           },
         });
       } else {
+        // Convert legacy SkipConfig to EpisodeSkipConfig for saving
+        const segments: import('@/lib/types').SkipSegment[] = [];
+        if (newConfig.intro_time > 0) {
+          segments.push({ start: 0, end: newConfig.intro_time, type: 'opening', autoSkip: newConfig.enable });
+        }
+        if (newConfig.outro_time < 0) {
+          segments.push({ start: 0, end: -newConfig.outro_time, type: 'ending', mode: 'remaining', remainingTime: -newConfig.outro_time, autoSkip: newConfig.enable, autoNextEpisode: newConfig.enable });
+        }
+        const episodeConfig: EpisodeSkipConfig = {
+          source: currentSourceRef.current,
+          id: currentIdRef.current,
+          title: '',
+          segments,
+          updated_time: Date.now(),
+        };
         await saveSkipConfig(
           currentSourceRef.current,
           currentIdRef.current,
-          newConfig
+          episodeConfig
         );
       }
       console.log('跳过片头片尾配置已保存:', newConfig);
@@ -1219,6 +1243,11 @@ const startDanmakuObserver = () => {
         params.append('episode', currentEpisodeNum.toString());
       }
 
+      // 手动匹配覆盖：使用 episode_id 直接获取指定弹幕
+      if (manualDanmuOverrideRef.current?.episodeId) {
+        params.set('episode_id', manualDanmuOverrideRef.current.episodeId.toString());
+      }
+
       if (!params.toString()) {
         console.log('没有可用的参数获取弹幕');
         return [];
@@ -1289,6 +1318,35 @@ const startDanmakuObserver = () => {
     } finally {
       // 重置加载状态
       danmuLoadingRef.current = false;
+    }
+  };
+
+  // 手动匹配弹幕应用
+  const handleDanmuManualApply = async (selection: DanmuManualSelection) => {
+    manualDanmuOverrideRef.current = { episodeId: selection.episodeId };
+    setIsDanmuManualModalOpen(false);
+
+    // 清除缓存以强制重新加载弹幕
+    const cacheKey = `${videoTitle}_${videoYear}_${videoDoubanId}_${currentEpisodeIndex + 1}`;
+    try { localStorage.removeItem(`danmu-cache_${cacheKey}`); } catch {/* ignore */}
+
+    // 重新加载弹幕
+    try {
+      const danmuData = await loadExternalDanmu();
+      if (danmuData && danmuData.length > 0 && artPlayerRef.current?.plugins?.artplayerPluginDanmuku) {
+        const plugin = artPlayerRef.current.plugins.artplayerPluginDanmuku;
+        plugin.config({ danmuku: danmuData });
+        plugin.load(danmuData);
+        if (artPlayerRef.current.notice) {
+          artPlayerRef.current.notice.show = `已加载手动匹配弹幕: ${selection.animeTitle} - ${selection.episodeTitle}`;
+        }
+      } else if (artPlayerRef.current?.notice) {
+        artPlayerRef.current.notice.show = '手动匹配弹幕: 未找到弹幕数据';
+      }
+    } catch (e) {
+      console.error('手动匹配弹幕加载失败:', e);
+    } finally {
+      manualDanmuOverrideRef.current = null;
     }
   };
 
@@ -1704,8 +1762,15 @@ const startDanmakuObserver = () => {
 
       try {
         const config = await getSkipConfig(currentSource, currentId);
-        if (config) {
-          setSkipConfig(config);
+        if (config && config.segments) {
+          // Convert EpisodeSkipConfig back to legacy format for UI
+          const opening = config.segments.find(s => s.type === 'opening');
+          const ending = config.segments.find(s => s.type === 'ending');
+          setSkipConfig({
+            enable: !!(opening?.autoSkip || ending?.autoSkip),
+            intro_time: opening?.end || 0,
+            outro_time: ending?.mode === 'remaining' ? -(ending.remainingTime || ending.end) : (ending ? -(ending.end) : 0),
+          });
         }
       } catch (err) {
         console.error('读取跳过片头片尾配置失败:', err);
@@ -1800,7 +1865,16 @@ const startDanmakuObserver = () => {
             currentSourceRef.current,
             currentIdRef.current
           );
-          await saveSkipConfig(newSource, newId, skipConfigRef.current);
+          await saveSkipConfig(newSource, newId, {
+            source: newSource,
+            id: newId,
+            title: '',
+            segments: [
+              ...(skipConfigRef.current.intro_time > 0 ? [{ start: 0, end: skipConfigRef.current.intro_time, type: 'opening' as const, autoSkip: skipConfigRef.current.enable }] : []),
+              ...(skipConfigRef.current.outro_time < 0 ? [{ start: 0, end: -skipConfigRef.current.outro_time, type: 'ending' as const, mode: 'remaining' as const, remainingTime: -skipConfigRef.current.outro_time, autoSkip: skipConfigRef.current.enable, autoNextEpisode: skipConfigRef.current.enable }] : []),
+            ],
+            updated_time: Date.now(),
+          });
         } catch (err) {
           console.error('清除跳过片头片尾配置失败:', err);
         }
@@ -2550,6 +2624,20 @@ enforceDanmakuVisibility();
             },
           },
           {
+            html: '手动匹配弹幕',
+            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            onClick: function () {
+              setIsDanmuManualModalOpen(true);
+            },
+          },
+          {
+            html: '跳过设置面板',
+            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            onClick: function () {
+              setIsSkipSettingMode((prev: boolean) => !prev);
+            },
+          },
+          {
             name: '设置片头',
             html: '设置片头',
             icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
@@ -2734,6 +2822,8 @@ enforceDanmakuVisibility();
 
         const currentTime = artPlayerRef.current.currentTime || 0;
         const duration = artPlayerRef.current.duration || 0;
+        setCurrentPlayTime(currentTime);
+        setVideoDuration(duration);
         const now = Date.now();
 
         // 限制跳过检查频率为1.5秒一次
@@ -3499,6 +3589,33 @@ enforceDanmakuVisibility();
       >
         <ChevronUp className='w-6 h-6 transition-transform group-hover:scale-110' />
       </button>
+
+      {/* 手动匹配弹幕弹窗 */}
+      <DanmuManualMatchModal
+        isOpen={isDanmuManualModalOpen}
+        defaultKeyword={videoTitle || ''}
+        currentEpisode={currentEpisodeIndex + 1}
+        onClose={() => setIsDanmuManualModalOpen(false)}
+        onApply={handleDanmuManualApply}
+      />
+
+      {/* 跳过片头片尾设置面板 */}
+      {isSkipSettingMode && (
+        <SkipController
+          source={currentSource || ''}
+          id={currentId || ''}
+          title={videoTitle || ''}
+          doubanId={videoDoubanId}
+          year={videoYear}
+          episodeIndex={currentEpisodeIndex}
+          artPlayerRef={artPlayerRef}
+          isSettingMode={isSkipSettingMode}
+          onSettingModeChange={setIsSkipSettingMode}
+          onNextEpisode={handleNextEpisode}
+          currentTime={currentPlayTime}
+          duration={videoDuration}
+        />
+      )}
     </PageLayout>
   );
 }

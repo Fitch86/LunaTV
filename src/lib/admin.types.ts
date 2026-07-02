@@ -24,6 +24,13 @@ export interface AdminConfig {
     DisableYellowFilter: boolean;
     FluidSearch: boolean;
   };
+  DanmuApiConfig?: {
+    enabled: boolean;                    // 是否启用弹幕API（默认启用）
+    useCustomApi: boolean;               // 是否使用自定义API（false则使用默认API）
+    customApiUrl: string;                // 自定义弹幕API地址
+    customToken: string;                 // 自定义API Token
+    timeout: number;                     // 请求超时时间（秒），默认30
+  };
   UserConfig: {
     AutoCleanupInactiveUsers?: boolean; // 是否自动清理非活跃用户，默认 false
     InactiveUserDays?: number; // 非活跃用户保留天数，默认 7
@@ -45,6 +52,7 @@ export interface AdminConfig {
     name: string;
     api: string;
     detail?: string;
+    type?: 'vod' | 'shortdrama'; // 视频源类型：vod=普通视频，shortdrama=短剧
     from: 'config' | 'custom';
     disabled?: boolean;
   }[];
@@ -65,6 +73,11 @@ export interface AdminConfig {
     channelNumber?: number;
     disabled?: boolean;
   }[];
+  ShortDramaConfig?: {
+    primaryApiUrl: string;
+    alternativeApiUrl: string;
+    enableAlternative: boolean;
+  };
 }
 
 export interface AdminConfigResult {

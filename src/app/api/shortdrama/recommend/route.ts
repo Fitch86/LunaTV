@@ -7,12 +7,13 @@ import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
 import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 // 默认短剧源
-const DEFAULT_SHORT_DRAMA_API = 'https://wwzy.tv/api.php/provide/vod';
+const DEFAULT_SHORT_DRAMA_API = 'https://tyyszyapi.com/api.php/provide/vod';
 
 // 从单个短剧源获取推荐数据（通过分类名称查找）
 async function fetchFromShortDramaSource(api: string, size: number) {
@@ -24,7 +25,7 @@ async function fetchFromShortDramaSource(api: string, size: number) {
       'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!listResponse.ok) {
@@ -59,7 +60,7 @@ async function fetchFromShortDramaSource(api: string, size: number) {
       'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -105,8 +106,9 @@ async function getRecommendedShortDramasInternal(
 
     // 如果没有配置短剧源，使用默认源
     if (shortDramaSources.length === 0) {
-      console.log('📺 使用默认短剧源');
-      return await fetchFromShortDramaSource(DEFAULT_SHORT_DRAMA_API, size);
+      const baseUrl = config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API;
+      console.log('📺 使用短剧源：', baseUrl);
+      return await fetchFromShortDramaSource(baseUrl, size);
     }
 
     // 有配置短剧源，聚合所有源的数据
@@ -148,8 +150,9 @@ async function getRecommendedShortDramasInternal(
     console.error('获取短剧推荐失败:', error);
     // 出错时fallback到默认源
     try {
-      console.log('⚠️ 出错，fallback到默认源');
-      return await fetchFromShortDramaSource(DEFAULT_SHORT_DRAMA_API, size);
+      console.log('⚠️ 出错，fallback到配置短剧源');
+      const config = await getConfig();
+      return await fetchFromShortDramaSource(config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API, size);
     } catch (fallbackError) {
       console.error('默认源也失败:', fallbackError);
       return [];

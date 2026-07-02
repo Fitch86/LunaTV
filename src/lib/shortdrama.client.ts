@@ -12,7 +12,7 @@ import {
   ShortDramaParseResult,
 } from './types';
 
-const SHORTDRAMA_API_BASE = 'https://wwzy.tv/api.php/provide/vod';
+const SHORTDRAMA_API_BASE = 'https://tyyszyapi.com/api.php/provide/vod';
 
 // 检测是否为移动端环境
 const isMobile = () => {
@@ -216,7 +216,8 @@ export async function searchShortDramas(
 export async function parseShortDramaEpisode(
   id: number,
   episode: number,
-  useProxy = true
+  useProxy = true,
+  alternativeApiUrl?: string
 ): Promise<ShortDramaParseResult> {
   try {
     const params = new URLSearchParams({
@@ -226,6 +227,9 @@ export async function parseShortDramaEpisode(
 
     if (useProxy) {
       params.append('proxy', 'true');
+    }
+    if (alternativeApiUrl) {
+      params.append('altApi', alternativeApiUrl);
     }
 
     const timestamp = Date.now();
