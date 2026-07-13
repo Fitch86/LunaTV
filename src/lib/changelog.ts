@@ -11,6 +11,22 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2026.07.13.01",
+    date: "2026-07-13",
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+    "修正弹幕 API",
+    "修正番剧获取不到数据",
+    "修正短剧获取不到数据",
+    "增加播放自动跳过片头片尾"
+    ]
+  },
+  {
     version: "2026.06.23.01",
     date: "2026-06-23",
     added: [
