@@ -5,6 +5,24 @@ import { db } from '@/lib/db';
 import { AdminConfig } from './admin.types';
 import { syncServerProxyFromConfig } from './fetch-with-proxy';
 
+// 🔥 海外兜底默认源（学习 SeeTV）：当用户未配置或所有用户源不可达时，自动启用
+// 这些源相比国内常见的"悟空/MAC/360"等源在海外 IP 下更可能可达
+// 优先级最低，仅作为最后兜底
+const FALLBACK_API_SITES: ApiSite[] = [
+  // 海外可达 + 支持 ac=search 关键字搜索
+  {
+    key: 'fallback_lziapi',
+    name: '🔥 默认海外源(全网)',
+    api: 'https://cj.lziapi.com/api.php/provide/vod',
+  },
+  // 海外可达但不支持关键字搜索（仅用作分类列表兜底）
+  {
+    key: 'fallback_tyyszy',
+    name: '🔥 默认海外源(分类)',
+    api: 'https://tyyszyapi.com/api.php/provide/vod',
+  },
+];
+
 export interface ApiSite {
   key: string;
   api: string;
@@ -448,6 +466,16 @@ export async function getCacheTime(): Promise<number> {
 export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
   const config = await getConfig();
   const allApiSites = config.SourceConfig.filter((s) => !s.disabled);
+
+  // 🔥 海外兜底：始终将默认源拼接在末尾，作为最后兜底（不覆盖用户同名源）
+  // 用户配置了多个源时也追加，作为最后兜底
+  const fallbackKeys = new Set(allApiSites.map((s) => s.key));
+  for (const fb of FALLBACK_API_SITES) {
+    if (!fallbackKeys.has(fb.key)) {
+      // cast as any: FALLBACK_API_SITES 没有 from 字段但 SourceConfig 要求
+      allApiSites.push({ ...fb, from: 'config', disabled: false } as any);
+    }
+  }
 
   if (!user) {
     return allApiSites;

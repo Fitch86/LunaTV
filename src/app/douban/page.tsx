@@ -13,6 +13,7 @@ import {
   getDoubanRecommends,
 } from '@/lib/douban.client';
 import { DoubanItem, DoubanResult } from '@/lib/types';
+import { processImageUrl } from '@/lib/utils';
 
 import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
 import DoubanCustomSelector from '@/components/DoubanCustomSelector';
@@ -297,13 +298,14 @@ function DoubanPageClient() {
             list: weekdayData.items.map((item) => ({
               id: item.id?.toString() || '',
               title: item.name_cn || item.name,
-              poster:
+              poster: processImageUrl(
                 item.images?.large ||
                 item.images?.common ||
                 item.images?.medium ||
                 item.images?.small ||
                 item.images?.grid ||
-                '/placeholder.jpg',
+                '/placeholder.jpg'
+              ),
               rate: item.rating?.score?.toFixed(1) || '',
               year: item.air_date?.split('-')?.[0] || '',
             })),

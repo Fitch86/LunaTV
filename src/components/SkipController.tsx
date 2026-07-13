@@ -124,13 +124,17 @@ export default function SkipController({
     const userAutoNextEpisode = savedEnableAutoNextEpisode !== null ? JSON.parse(savedEnableAutoNextEpisode) : true;
 
     return {
+      // 🔥 智能默认值：根据视频类型动态调整
+      // 默认通用片头：1:30（适配电影/电视剧等长视频）
+      // 短视频（≤5min）会自动按比例调整（见 checkSkipSegment 中的 isShortVideo 分支）
       openingStart: '0:00',   // 片头开始时间（分:秒格式）
       openingEnd: '1:30',     // 片头结束时间（分:秒格式，90秒=1分30秒）
       endingMode: 'remaining', // 片尾模式：'remaining'(剩余时间) 或 'absolute'(绝对时间)
+      // 🔥 片尾提前2:00（还剩2分钟开始倒计时），贴合大多数视频的片尾长度
       endingStart: '2:00',    // 片尾开始时间（剩余时间模式：还剩多少时间开始倒计时；绝对时间模式：从视频开始多长时间）
       endingEnd: '',          // 片尾结束时间（可选，空表示直接跳转下一集）
-      autoSkip: userAutoSkip,         // 🔑 从 localStorage 读取
-      autoNextEpisode: userAutoNextEpisode,  // 🔑 从 localStorage 读取
+      autoSkip: userAutoSkip,         // 🔑 从 localStorage 读取（默认 true）
+      autoNextEpisode: userAutoNextEpisode,  // 🔑 从 localStorage 读取（默认 true）
     };
   });
 

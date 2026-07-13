@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
 import { DEFAULT_USER_AGENT } from '@/lib/user-agent';
-import { safeJsonParse } from '@/lib/shortdrama-safe-fetch';
 
 // 强制动态路由，禁用所有缓存
 export const runtime = 'nodejs';
@@ -15,51 +14,16 @@ export const fetchCache = 'force-no-store';
 // 默认短剧源
 const DEFAULT_SHORT_DRAMA_API = 'https://tyyszyapi.com/api.php/provide/vod';
 
-// 从单个短剧源获取推荐数据（通过分类名称查找）
-async function fetchFromShortDramaSource(api: string, size: number) {
-  // Step 1: 获取分类列表，找到"短剧"分类的 ID
-  const listUrl = `${api}?ac=list`;
+// 🔥 短剧关键词（学习 SeeTV）：除了父分类"短剧"，子分类也包含短剧内容
+const SHORT_DRAMA_KEYWORDS = ['短剧', '女频恋爱', '反转爽剧', '古装仙侠', '年代穿越', '脑洞悬疑', '现代都市'];
+const FALLBACK_CATEGORY_IDS = [54, 73, 64, 65, 66, 67, 68, 69];
 
-  const listResponse = await fetch(listUrl, {
-    headers: {
-      'User-Agent': DEFAULT_USER_AGENT,
-      Accept: 'application/json',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!listResponse.ok) {
-    throw new Error(`HTTP error! status: ${listResponse.status}`);
-  }
-
-  const listData = await safeJsonParse(listResponse);
-  if (!listData) {
-    throw new Error('分类列表API返回非JSON数据');
-  }
-
-  const categories = listData.class || [];
-
-  // 查找"短剧"分类（只要包含"短剧"两个字即可）
-  const shortDramaCategory = categories.find(
-    (cat: any) => cat.type_name && cat.type_name.includes('短剧')
-  );
-
-  if (!shortDramaCategory) {
-    console.log(`该源没有短剧分类`);
-    return [];
-  }
-
-  const categoryId = shortDramaCategory.type_id;
-  console.log(`找到短剧分类 ID: ${categoryId}`);
-
-  // Step 2: 获取该分类的短剧列表
+// 从某个分类下取数据
+async function fetchFromCategory(api: string, categoryId: number, size: number): Promise<any[]> {
   const apiUrl = `${api}?ac=detail&t=${categoryId}&pg=1`;
 
   const response = await fetch(apiUrl, {
-    headers: {
-      'User-Agent': DEFAULT_USER_AGENT,
-      Accept: 'application/json',
-    },
+    headers: { 'User-Agent': DEFAULT_USER_AGENT, Accept: 'application/json' },
     signal: AbortSignal.timeout(15000),
   });
 
@@ -67,11 +31,7 @@ async function fetchFromShortDramaSource(api: string, size: number) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  const data = await safeJsonParse(response);
-  if (!data) {
-    throw new Error('短剧列表API返回非JSON数据');
-  }
-
+  const data = await response.json();
   const items = data.list || [];
 
   return items.slice(0, size).map((item: any) => ({
@@ -88,39 +48,95 @@ async function fetchFromShortDramaSource(api: string, size: number) {
   }));
 }
 
+// 🔥 智能获取推荐短剧：多级兜底（学习 SeeTV）
+async function fetchRecommendsForApi(api: string, size: number): Promise<any[]> {
+  // Step 1: 获取分类列表找到短剧相关分类
+  let listData: any = null;
+  try {
+    const listResponse = await fetch(`${api}?ac=list`, {
+      headers: { 'User-Agent': DEFAULT_USER_AGENT, Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (listResponse.ok) {
+      listData = await listResponse.json().catch(() => null);
+    }
+  } catch {
+    // ignore
+  }
+
+  const categories: any[] = listData?.class || [];
+  const matchedCategories = categories.filter((cat: any) =>
+    cat.type_name && SHORT_DRAMA_KEYWORDS.some((kw: string) => cat.type_name.includes(kw))
+  );
+
+  // Step 2: 优先"短剧"父分类
+  const primary = matchedCategories.find((cat: any) => cat.type_name === '短剧') || matchedCategories[0];
+
+  if (primary) {
+    console.log(`📡 [RECOMMEND] 尝试主分类 ${primary.type_id} (${primary.type_name})`);
+    try {
+      const items = await fetchFromCategory(api, primary.type_id, size);
+      if (items.length > 0) return items;
+    } catch (err) {
+      console.warn(`主分类失败:`, err);
+    }
+  }
+
+  // Step 3: 尝试其他子分类
+  for (const alt of matchedCategories) {
+    if (primary && alt.type_id === primary.type_id) continue;
+    console.log(`📡 [RECOMMEND] 尝试子分类 ${alt.type_id} (${alt.type_name})`);
+    try {
+      const items = await fetchFromCategory(api, alt.type_id, size);
+      if (items.length > 0) return items;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Step 4: 硬编码兜底分类 ID
+  for (const fid of FALLBACK_CATEGORY_IDS) {
+    if (primary && fid === primary.type_id) continue;
+    console.log(`📡 [RECOMMEND] 硬编码兜底分类 ${fid}`);
+    try {
+      const items = await fetchFromCategory(api, fid, size);
+      if (items.length > 0) return items;
+    } catch {
+      // ignore
+    }
+  }
+
+  return [];
+}
+
 // 服务端专用函数，从所有短剧源聚合数据
 async function getRecommendedShortDramasInternal(
   category?: number,
   size = 10
 ) {
   try {
-    // 获取配置
     const config = await getConfig();
 
-    // 筛选出所有启用的短剧源
     const shortDramaSources = (config.SourceConfig || []).filter(
       (source: any) => source.type === 'shortdrama' && !source.disabled
     );
 
     console.log(`📺 找到 ${shortDramaSources.length} 个配置的短剧源`);
 
-    // 如果没有配置短剧源，使用默认源
     if (shortDramaSources.length === 0) {
       const baseUrl = config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API;
       console.log('📺 使用短剧源：', baseUrl);
-      return await fetchFromShortDramaSource(baseUrl, size);
+      return await fetchRecommendsForApi(baseUrl, size);
     }
 
-    // 有配置短剧源，聚合所有源的数据
     console.log('📺 聚合多个短剧源的数据');
     const results = await Promise.allSettled(
       shortDramaSources.map((source: any) => {
         console.log(`🔄 请求短剧源: ${source.name}`);
-        return fetchFromShortDramaSource(source.api, size);
+        return fetchRecommendsForApi(source.api, size);
       })
     );
 
-    // 合并所有成功的结果
     const allItems: any[] = [];
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
@@ -131,28 +147,22 @@ async function getRecommendedShortDramasInternal(
       }
     });
 
-    // 去重（根据名称）
     const uniqueItems = Array.from(
       new Map(allItems.map((item: any) => [item.name, item])).values()
     );
-
-    // 按更新时间排序
     uniqueItems.sort((a: any, b: any) =>
       new Date(b.update_time).getTime() - new Date(a.update_time).getTime()
     );
 
-    // 返回指定数量
     const finalItems = uniqueItems.slice(0, size);
     console.log(`📊 最终返回 ${finalItems.length} 条短剧数据`);
-
     return finalItems;
   } catch (error) {
     console.error('获取短剧推荐失败:', error);
-    // 出错时fallback到默认源
     try {
-      console.log('⚠️ 出错，fallback到配置短剧源');
+      console.log('⚠️ 出错，fallback到默认源');
       const config = await getConfig();
-      return await fetchFromShortDramaSource(config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API, size);
+      return await fetchRecommendsForApi(config.ShortDramaConfig?.primaryApiUrl || DEFAULT_SHORT_DRAMA_API, size);
     } catch (fallbackError) {
       console.error('默认源也失败:', fallbackError);
       return [];
@@ -176,20 +186,14 @@ export async function GET(request: NextRequest) {
     const result = await getRecommendedShortDramasInternal(categoryNum, pageSize);
 
     const response = NextResponse.json(result);
-
-    // 2小时 HTTP 缓存
     const cacheTime = 7200;
     response.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
     response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${cacheTime}`);
-
-    // Vary头确保不同设备有不同缓存
     response.headers.set('Vary', 'Accept-Encoding, User-Agent');
-
     return response;
   } catch (error) {
     console.error('获取推荐短剧失败:', error);
-    // 返回空数组而非500错误，避免页面白屏
     return NextResponse.json([]);
   }
 }

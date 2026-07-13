@@ -32,7 +32,7 @@ import EpisodeSelector from '@/components/EpisodeSelector';
 import LiveLoadingIndicator from '@/components/LiveLoadingIndicator';
 import PageLayout from '@/components/PageLayout';
 import DanmuManualMatchModal, { DanmuManualSelection } from '@/components/DanmuManualMatchModal';
-import SkipController from '@/components/SkipController';
+import SkipController, { SkipSettingsButton } from '@/components/SkipController';
 
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
 declare global {
@@ -1466,7 +1466,8 @@ const startDanmakuObserver = () => {
         setAvailableSources([detailData]);
         return [detailData];
       } catch (err) {
-        console.error('获取视频详情失败:', err);
+        console.warn('获取视频详情失败:', err);
+        // 🔥 不返回空数组 — 而是返回空，让调用方继续走搜索结果回退逻辑
         return [];
       } finally {
         setSourceSearchLoading(false);
@@ -1641,11 +1642,12 @@ const startDanmakuObserver = () => {
         }
         
         // 去重并设置结果
-        const uniqueResults = allResults.filter((result, index, self) => 
+        const uniqueResults = allResults.filter((result, index, self) =>
           index === self.findIndex(r => r.source === result.source && r.id === result.id)
         );
-        
+
         sourcesInfo = uniqueResults;
+        // 🔥 智能回退：指定的源不存在于搜索结果时，尝试该指定源的详情
         if (
           currentSource &&
           currentId &&
@@ -1653,10 +1655,16 @@ const startDanmakuObserver = () => {
             (source) => source.source === currentSource && source.id === currentId
           )
         ) {
-          sourcesInfo = await fetchSourceDetail(currentSource, currentId);
+          const detailResults = await fetchSourceDetail(currentSource, currentId);
+          // 如果指定源详情也获取失败（502/海外不可达），保留搜索结果以便后续使用
+          if (detailResults.length > 0) {
+            sourcesInfo = detailResults;
+          }
         }
       }
+      // 🔥 最后兜底：如果仍然没有结果，尝试用首选的搜索结果（而不是直接显示错误）
       if (sourcesInfo.length === 0) {
+        // 已经尝试过多种搜索变体了 — 此时才显示"未找到匹配结果"
         setError('未找到匹配结果');
         setLoading(false);
         return;
@@ -1671,9 +1679,13 @@ const startDanmakuObserver = () => {
         if (target) {
           detailData = target;
         } else {
-          setError('未找到匹配结果');
-          setLoading(false);
-          return;
+          // 🔥 智能回退：用户指定的源不可达，尝试通过搜索结果中的其他源播放
+          // 而不是直接报错，让用户能继续使用海外可用的备用源
+          console.warn(`指定的源 ${currentSource}/${currentId} 不可用，使用搜索结果中的第一个源 ${sourcesInfo[0].source} 作为兜底`);
+          detailData = sourcesInfo[0];
+          // 更新 currentSource 为兜底源
+          setCurrentSource(detailData.source);
+          setCurrentId(detailData.id);
         }
       }
 
@@ -2817,13 +2829,20 @@ enforceDanmakuVisibility();
       });
 
       // 监听视频时间更新事件，实现跳过片头片尾
+      // 🔑 修复：始终更新 currentTime/duration 状态（传给 SkipController），
+      // 实际的跳过动作受旧的 enable 开关控制（保持向后兼容）。
       artPlayerRef.current.on('video:timeupdate', () => {
-        if (!skipConfigRef.current.enable) return;
-
         const currentTime = artPlayerRef.current.currentTime || 0;
         const duration = artPlayerRef.current.duration || 0;
         setCurrentPlayTime(currentTime);
         setVideoDuration(duration);
+        // 🔑 SkipController 内部的 useEffect 会基于 currentTime 触发，
+        // 即使旧的 enable=false 也不影响 SkipController 的智能跳过逻辑。
+        if (currentTime <= 0) return;
+
+        // 🔒 旧的硬编码跳过逻辑：仅在用户显式启用（来源 URL/搜索参数）时生效
+        if (!skipConfigRef.current.enable) return;
+
         const now = Date.now();
 
         // 限制跳过检查频率为1.5秒一次
@@ -3208,6 +3227,13 @@ enforceDanmakuVisibility();
                   ref={artRef}
                   className='bg-black w-full h-full rounded-xl overflow-hidden shadow-lg'
                 ></div>
+
+                {/* Skip settings button (SeeTV pattern) */}
+                {currentSource && currentId && (
+                  <div className='absolute top-4 right-4 z-10'>
+                    <SkipSettingsButton onClick={() => setIsSkipSettingMode(true)} />
+              </div>
+                )}
 
                 {/* 换源加载蒙层 */}
                 {playVideoLoading && (
@@ -3599,12 +3625,13 @@ enforceDanmakuVisibility();
         onApply={handleDanmuManualApply}
       />
 
-      {/* 跳过片头片尾设置面板 */}
-      {isSkipSettingMode && (
+      {/* 🔥 关键修复：参考 SeeTV，SkipController 必须始终挂载（仅设置面板受 isSettingMode 控制）
+          — 否则自动跳过逻辑会因为组件没挂载而完全不工作 */}
+      {currentSource && currentId && (detail?.title || videoTitle) && (
         <SkipController
           source={currentSource || ''}
           id={currentId || ''}
-          title={videoTitle || ''}
+          title={detail?.title || videoTitle || ''}
           doubanId={videoDoubanId}
           year={videoYear}
           episodeIndex={currentEpisodeIndex}
